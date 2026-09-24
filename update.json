@@ -1,7 +1,7 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1.0",
-  "apkUrl": "https://github.com/Haa1024/SEU-Timetable/releases/download/v1.1.0/SEU-Timetable-v1.1.0.apk",
-  "notes": "登录链路重写：登录与续期不再依赖隐藏网页，改为纯 HTTP 直达校园系统。\n\n• 登录/续期速度大幅提升：跳过网页加载与页面点击，少一次完整页面渲染\n• 修复「会话建立后仍被退回网页登录」的问题（网关票据未被正确使用）\n• 修复空课表页登录入口延迟出现的问题：入口立即显示，不必等一次网络往返\n• 登录入口在「检查中」时也可见，冷启动时不再出现「找不到登录入口」的空课表页",
+  "versionCode": 3,
+  "versionName": "1.2.0",
+  "apkUrl": "https://github.com/Haa1024/SEU-Timetable/releases/download/v1.2.0/SEU-Timetable-v1.2.0.apk",
+  "notes": "新增新手引导，并补上几处早就该有的操作手感。\n\n• 新增新手引导：首次进入时，会在真实界面上逐步高亮各个功能的位置，并配文字说明；想重看可在「我的 → 新手指引」里打开\n• 课表页支持左右滑动切换周次\n• 课表表头的星期下方显示当天日期，翻周时自动跟随\n• 切回 App 时，周次会自动校正到「今天所在的周」\n• 切换底部页面时加入横向滑动过渡",
   "mandatory": false
 }
