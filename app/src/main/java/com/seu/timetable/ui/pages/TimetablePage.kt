@@ -1,8 +1,16 @@
 package com.seu.timetable.ui.pages
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -34,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
@@ -84,12 +93,36 @@ private val TimeGutterGap = 6.dp
 private const val OutOfWeekNote = "[非本周]"
 
 /**
+ * 表头高度。原为单行 30dp；加日期后改两行（周几 + 日期）。
+ *
+ * 取 40dp 而非 46dp：`t.micro` 行高约 14dp，两行 28dp，再留 12dp 内边距足够。
+ * 表头是固定不滚的，每多 1dp 都从课程网格的可视高度里扣，故不取宽裕值。
+ */
+private val HeaderHeight = 40.dp
+
+/**
+ * 左右滑动翻周的触发距离（像素）。
+ *
+ * 取 56dp 换算而来——约合一个指腹的宽度。比常见的"滑动阈值 24~40dp"更大，
+ * 理由是翻周属于低频且"看错周"代价不小的动作（要再点回来），
+ * 宁可让用户多划一点，也不要一次意外的横向抖动就跳周。
+ *
+ * 注意它必须在 `pointerInput` 的 lambda 里用 `density` 换算，
+ * 不能直接写 `56.dp` —— 拖动回调给的是**像素**。
+ */
+private val SwipeThresholdDp = 56.dp
+
+/** 切周动画时长。200ms 是"看得见在动、又不拖沓"的常见取值。 */
+private const val WeekSlideMs = 200
+
+/**
  * 页面 02 · 课表周网格（核心页，规格 4.2）。
  *
- * 与规格存在以下三处偏差（均已确认）：
+ * 与规格存在以下五处偏差（均已确认）：
  *
  * 1. 周次切换器由「5 个 WeekChip」改为 `‹ 第 X 周 ›` 箭头切换。
  *    五个 chip 一次仅显示 5 周，切换至第 16 周需点击十数次，效率过低。
+ *    另支持左右滑动切周（见 [SwipeThresholdDp]）与点击周次标签直接跳周。
  *
  * 2. 行数与行高：规格按「5 个大节 × PITCH 102」出图，而真实一天为 13 节，
  *    照搬会产生 1326dp。此处改为「每节一行、62dp」，上午 / 下午 / 晚上之间
@@ -98,6 +131,14 @@ private const val OutOfWeekNote = "[非本周]"
  *
  * 3. 未排课提示条：规格未定义该位置，按需求补充一条可关闭提示，停靠于网格下方。
  *    置于课表页而非今日页——其描述的是「本学期的课程」，而非「今日」。
+ *
+ * 4. 表头在「周几」下方增加该周对应日期（如 `周一` / `9.21`）。
+ *    规格的表头只有周几，但课表按周翻动后，用户常需确认"这是哪一周的哪一天"，
+ *    尤其在看第 5 周之后的课表时。日期仅加在下方一行，不改变表头高度以外的布局。
+ *
+ * 5. 周次由外部传入（受控组件），本页**不自行推算当前周**。
+ *    跨周校正的时机由调用方决定（见 `AppRoot` 的「回前台校正」）——
+ *    放在本页会让"用户手动翻的周"与"今天所在的周"两套意图纠缠在一起。
  */
 @Composable
 fun TimetablePage(
@@ -190,6 +231,7 @@ fun TimetablePage(
                 schedule = schedule,
                 today = today,
                 week = week,
+                onWeekChange = onWeekChange,
                 onCourseClick = onCourseClick,
                 showOutOfWeek = showOutOfWeek,
             )
@@ -359,6 +401,9 @@ private fun WeekGrid(
     schedule: PeriodSchedule,
     today: LocalDate,
     week: Int,
+    /** 左右滑动换周时回调。与 [WeekSwitcher] 的 `onChange` 是同一个出口——
+     *  两条交互路径（点箭头 / 滑手势）走同一处状态更新，避免两套周次来源。 */
+    onWeekChange: (Int) -> Unit,
     onCourseClick: (String) -> Unit,
     showOutOfWeek: Boolean,
 ) {
@@ -388,169 +433,248 @@ private fun WeekGrid(
     }
 
     val todayDay = today.dayOfWeek.value
-    val isTodayWeek = week == term.weekOf(today)
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(
+        Modifier
+            .fillMaxSize()
+            // ---- 左右滑动切周 ----
+            //
+            // 用 `detectHorizontalDragGestures` 而非 `draggable` / `swipeable`：
+            // 前者在判定为水平拖动后会自动**吃掉**该手势的后续事件，
+            // 而垂直方向不受影响——网格本身就是竖直滚动的，
+            // 两者方向正交，能自然共存，不必手写方向仲裁。
+            //
+            // 阈值取 [SwipeThresholdDp]，且按**拖动距离**判定而非速度：
+            // 翻周是低频动作，要求用户明确地"划一段"，比甩一下就翻更不易误触。
+            // 不加速度判据是有意的——速度阈值在低端机上不稳，宁可只认距离。
+            .pointerInput(week, timetable.displayedWeeks) {
+                // 拖动回调给的是像素，故在此按当前屏幕密度换算一次
+                val thresholdPx = SwipeThresholdDp.toPx()
+                var accum = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { accum = 0f },
+                    onDragEnd = {
+                        when {
+                            // 左划（accum 为负）= 看下一周
+                            accum <= -thresholdPx && week < timetable.displayedWeeks ->
+                                onWeekChange(week + 1)
+                            // 右划（accum 为正）= 看上一周
+                            accum >= thresholdPx && week > 1 ->
+                                onWeekChange(week - 1)
+                        }
+                        accum = 0f
+                    },
+                    onDragCancel = { accum = 0f },
+                ) { _, dragAmount -> accum += dragAmount }
+            }
+    ) {
         // 内容可用宽 = 屏宽 − 左右各 6；节次栏取实测时间文字宽度；剩余宽度按 7 等分。
         val contentWidth = maxWidth - GridHorizontalPadding * 2
         val gutter = rememberTimeColumnWidth(schedule, periods) + TimeGutterGap
         val colWidth = (contentWidth - gutter) / 7
         val totalHeight = gridHeight(term, periods)
 
-        Column(Modifier.fillMaxSize()) {
-            // ---- 固定表头：周一…周日 ----
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = GridHorizontalPadding)
-                    .height(30.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Spacer(Modifier.width(gutter))
-                for (d in 1..7) {
-                    val isToday = d == todayDay && isTodayWeek
-                    Text(
-                        DAY_NAMES[d],
-                        Modifier.width(colWidth),
-                        style = t.micro,
-                        color = when {
-                            isToday -> c.primary
-                            d >= 6 -> c.textTertiary
-                            else -> c.textSecondary
-                        },
-                        textAlign = TextAlign.Center,
-                    )
-                }
-            }
-
-            // ---- 可滚动网格 ----
-            // 顺序要点：先令滚动容器占满视口（weight(1f) + fillMaxSize），
-            // 再由内容撑至 totalHeight。反之（先 height 再 scroll）
-            // 内容高等于视口高，结果将无法滚动。
-            Box(Modifier.weight(1f)) {
-                Box(
+        // 表头与网格一起做切周动画。
+        //
+        // 为何两者要"一起"：表头带日期、网格放课块，翻周时二者装的是同一天的数据。
+        // 若只动网格，会出现"课块已经滑到第 2 周、日期还是第 1 周"的错位瞬间——
+        // 动画只要够显眼，这种不一致就会被看见。
+        //
+        // 方向与手势同向：看下一周（week 增大）时新内容从**右侧**进场、
+        // 旧内容向左退场，与"把第 1 周往左推走、第 2 周从右边进来"的心理模型一致。
+        // 故这里记下上一次的 week 以判断方向（`targetState > initialState` 即可）。
+        AnimatedContent(
+            targetState = week,
+            transitionSpec = {
+                val forward = targetState > initialState
+                val w = if (forward) 1 else -1
+                (
+                    slideInHorizontally(tween(WeekSlideMs)) { it * w } + fadeIn(tween(WeekSlideMs))
+                    ).togetherWith(
+                    slideOutHorizontally(tween(WeekSlideMs)) { -it * w } + fadeOut(tween(WeekSlideMs))
+                )
+            },
+            label = "week",
+        ) { shownWeek ->
+            Column(Modifier.fillMaxSize()) {
+                // ---- 固定表头：周一…周日，每列下方带该周对应日期 ----
+                //
+                // 日期取 `term.dateOf(shownWeek, d)`——它只依赖「第几周 + 星期几」，
+                // 所以翻周时日期自动跟着变，无需另存状态。
+                //
+                // 两行布局（周几 / 日期）而非并排单行：列宽约 46dp（7 列平分），
+                // 「周三 9/23」并排会在窄屏被压到截断，而课程表列一旦文字截断就失去意义。
+                Row(
                     Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .fillMaxWidth()
+                        .padding(horizontal = GridHorizontalPadding)
+                        .height(HeaderHeight),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = GridHorizontalPadding)
-                            .height(totalHeight)
-                    ) {
-                        // 今日整列淡色底（对应规格 4.2 的 TodayColumnTint，不透明度 60%）。
-                        if (isTodayWeek) {
-                            Box(
-                                Modifier
-                                    .offset(x = gutter + colWidth * (todayDay - 1))
-                                    .width(colWidth)
-                                    .height(totalHeight)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(c.primarySoft.copy(alpha = 0.6f))
+                    Spacer(Modifier.width(gutter))
+                    for (d in 1..7) {
+                        val isToday = d == todayDay && shownWeek == term.weekOf(today)
+                        val date = term.dateOf(shownWeek, d)
+                        Column(
+                            Modifier.width(colWidth),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(
+                                DAY_NAMES[d],
+                                style = t.micro,
+                                color = when {
+                                    isToday -> c.primary
+                                    d >= 6 -> c.textTertiary
+                                    else -> c.textSecondary
+                                },
+                                textAlign = TextAlign.Center,
                             )
-                        }
-
-                        // 行分隔线
-                        for (p in 2..periods) {
-                            Box(
-                                Modifier
-                                    .offset(x = gutter, y = rowTopOf(term, p))
-                                    .width(contentWidth - gutter)
-                                    .height(1.dp)
-                                    .background(c.border)
-                            )
-                        }
-
-                        // 节次栏：节次号 + 该节起止时刻（右对齐）。
-                        //
-                        // 时刻取自当前课表自身的作息表（BoardMeta.periodSchedule），
-                        // 而非写死常量：自建课表可由用户自行填写时间，
-                        // 导入课表则使用默认 SEU 作息。因此此处须接收参数，
-                        // 不得在页面内直接读取 `PeriodTimes.SEU`。
-                        //
-                        // 接口不提供时刻（多份真实请求中仅含上午 / 下午 / 晚上分组），
-                        // 故该数据完全来自本地配置。未配置的节次仅显示节次号，不做推断。
-                        for (p in 1..periods) {
-                            val time = schedule.timeOf(p)
-                                Box(
-                                    Modifier
-                                        .offset(y = rowTopOf(term, p))
-                                        .width(gutter - TimeGutterGap)
-                                        .height(PeriodPitch),
-                                    contentAlignment = Alignment.TopEnd,
-                                ) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("$p", style = t.gridRoom, color = c.textTertiary)
-                                    if (time != null) {
-                                        Text(
-                                            time.beginLabel(),
-                                            style = t.gridTime,
-                                            color = c.textTertiary.copy(alpha = 0.72f),
-                                            maxLines = 1,
-                                        )
-                                        Text(
-                                            time.end.toString(),
-                                            style = t.gridTime,
-                                            color = c.textTertiary.copy(alpha = 0.72f),
-                                            maxLines = 1,
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // 影子块（非本周）：
-                        // 必须绘制于本周课块之前——Compose 中后绘制者位于上层，
-                        // 若有遗漏的重叠，被覆盖的应为影子块而非本周课程。
-                        // 整块 alpha 0.32 叠加头部 [非本周] 文字标注：仅凭透明度
-                        // 在缩略截图、深色主题或色弱场景下仍可能被误读为本周围课程。
-                        // 影子块仍可点击——其课程详情会绘制完整周次分布条，
-                        // 该处才是说明「本门课程具体在哪些周上课」的位置。
-                        ghostSessions.forEach { session ->
-                            val course = timetable.courseOf(session) ?: return@forEach
-                            CourseBlock(
-                                modifier = Modifier
-                                    .offset(
-                                        x = gutter + colWidth * (session.dayOfWeek - 1) + 1.dp,
-                                        y = blockTopOf(term, session) + 2.dp,
-                                    )
-                                    .width(colWidth - 2.dp)
-                                    .height(blockHeightOf(term, session) - 4.dp),
-                                boxHeight = blockHeightOf(term, session) - 4.dp,
-                                name = course.name,
-                                room = session.room,
-                                color = courseColorOf(slots[course.id]),
-                                note = OutOfWeekNote,
-                                onClick = { onCourseClick(course.id) },
-                            )
-                        }
-
-                        // 本周课块（note = null → 不透明、无标注）。
-                        sessions.forEach { session ->
-                            val course = timetable.courseOf(session) ?: return@forEach
-                            CourseBlock(
-                                modifier = Modifier
-                                    .offset(
-                                        x = gutter + colWidth * (session.dayOfWeek - 1) + 1.dp,
-                                        y = blockTopOf(term, session) + 2.dp,
-                                    )
-                                    .width(colWidth - 2.dp)
-                                    .height(blockHeightOf(term, session) - 4.dp),
-                                boxHeight = blockHeightOf(term, session) - 4.dp,
-                                name = course.name,
-                                room = session.room,
-                                color = courseColorOf(slots[course.id]),
-                                note = null,
-                                onClick = { onCourseClick(course.id) },
+                            Spacer(Modifier.height(1.dp))
+                            Text(
+                                // 「9.21」比「9/21」少一个字符，窄列下更不易挤
+                                "${date.monthValue}.${date.dayOfMonth}",
+                                style = t.micro,
+                                // 日期一律用最弱色：它是辅助信息，若与周几同色，
+                                // 两行会争抢注意力，反而不易一眼扫到「周几」。
+                                // 仅今天例外，跟着周几一起点亮。
+                                color = if (isToday) c.primary else c.textTertiary,
+                                textAlign = TextAlign.Center,
                             )
                         }
                     }
                 }
+
+                // ---- 可滚动网格 ----
+                // 顺序要点：先令滚动容器占满视口（weight(1f) + fillMaxSize），
+                // 再由内容撑至 totalHeight。反之（先 height 再 scroll）
+                // 内容高等于视口高，结果将无法滚动。
+                Box(Modifier.weight(1f)) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = GridHorizontalPadding)
+                                .height(totalHeight)
+                        ) {
+                            // 今日整列淡色底（对应规格 4.2 的 TodayColumnTint，不透明度 60%）。
+                            // 判据用 `shownWeek` 而非外层 `week`：动画期间二者会短暂不同
+                            // （旧内容还在退场），用前者才能让底色跟着自己那张内容一起淡出。
+                            if (shownWeek == term.weekOf(today)) {
+                                Box(
+                                    Modifier
+                                        .offset(x = gutter + colWidth * (todayDay - 1))
+                                        .width(colWidth)
+                                        .height(totalHeight)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(c.primarySoft.copy(alpha = 0.6f))
+                                )
+                            }
+
+                            // 行分隔线
+                            for (p in 2..periods) {
+                                Box(
+                                    Modifier
+                                        .offset(x = gutter, y = rowTopOf(term, p))
+                                        .width(contentWidth - gutter)
+                                        .height(1.dp)
+                                        .background(c.border)
+                                )
+                            }
+
+                            // 节次栏：节次号 + 该节起止时刻（右对齐）。
+                            //
+                            // 时刻取自当前课表自身的作息表（BoardMeta.periodSchedule），
+                            // 而非写死常量：自建课表可由用户自行填写时间，
+                            // 导入课表则使用默认 SEU 作息。因此此处须接收参数，
+                            // 不得在页面内直接读取 `PeriodTimes.SEU`。
+                            //
+                            // 接口不提供时刻（多份真实请求中仅含上午 / 下午 / 晚上分组），
+                            // 故该数据完全来自本地配置。未配置的节次仅显示节次号，不做推断。
+                            for (p in 1..periods) {
+                                val time = schedule.timeOf(p)
+                                    Box(
+                                        Modifier
+                                            .offset(y = rowTopOf(term, p))
+                                            .width(gutter - TimeGutterGap)
+                                            .height(PeriodPitch),
+                                        contentAlignment = Alignment.TopEnd,
+                                    ) {
+                                    Column(horizontalAlignment = Alignment.End) {
+                                        Text("$p", style = t.gridRoom, color = c.textTertiary)
+                                        if (time != null) {
+                                            Text(
+                                                time.beginLabel(),
+                                                style = t.gridTime,
+                                                color = c.textTertiary.copy(alpha = 0.72f),
+                                                maxLines = 1,
+                                            )
+                                            Text(
+                                                time.end.toString(),
+                                                style = t.gridTime,
+                                                color = c.textTertiary.copy(alpha = 0.72f),
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 影子块（非本周）：
+                            // 必须绘制于本周课块之前——Compose 中后绘制者位于上层，
+                            // 若有遗漏的重叠，被覆盖的应为影子块而非本周课程。
+                            // 整块 alpha 0.32 叠加头部 [非本周] 文字标注：仅凭透明度
+                            // 在缩略截图、深色主题或色弱场景下仍可能被误读为本周围课程。
+                            // 影子块仍可点击——其课程详情会绘制完整周次分布条，
+                            // 该处才是说明「本门课程具体在哪些周上课」的位置。
+                            ghostSessions.forEach { session ->
+                                val course = timetable.courseOf(session) ?: return@forEach
+                                CourseBlock(
+                                    modifier = Modifier
+                                        .offset(
+                                            x = gutter + colWidth * (session.dayOfWeek - 1) + 1.dp,
+                                            y = blockTopOf(term, session) + 2.dp,
+                                        )
+                                        .width(colWidth - 2.dp)
+                                        .height(blockHeightOf(term, session) - 4.dp),
+                                    boxHeight = blockHeightOf(term, session) - 4.dp,
+                                    name = course.name,
+                                    room = session.room,
+                                    color = courseColorOf(slots[course.id]),
+                                    note = OutOfWeekNote,
+                                    onClick = { onCourseClick(course.id) },
+                                )
+                            }
+
+                            // 本周课块（note = null → 不透明、无标注）。
+                            sessions.forEach { session ->
+                                val course = timetable.courseOf(session) ?: return@forEach
+                                CourseBlock(
+                                    modifier = Modifier
+                                        .offset(
+                                            x = gutter + colWidth * (session.dayOfWeek - 1) + 1.dp,
+                                            y = blockTopOf(term, session) + 2.dp,
+                                        )
+                                        .width(colWidth - 2.dp)
+                                        .height(blockHeightOf(term, session) - 4.dp),
+                                    boxHeight = blockHeightOf(term, session) - 4.dp,
+                                    name = course.name,
+                                    room = session.room,
+                                    color = courseColorOf(slots[course.id]),
+                                    note = null,
+                                    onClick = { onCourseClick(course.id) },
+                                )
+                            }
+                        }
+                    }
+                }
             }
-        }
-    }
-}
+            }   // Column
+        }       // AnimatedContent
+    }           // BoxWithConstraints（同为 WeekGrid 函数体的结束）
 
 // ---------------------------------------------------------------------------
 // 网格几何：每节一行 + 组间额外间隙

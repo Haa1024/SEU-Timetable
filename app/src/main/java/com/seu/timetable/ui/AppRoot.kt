@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,6 +49,9 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.seu.timetable.data.CasAuthClient
 import com.seu.timetable.data.CasLoginResult
 import com.seu.timetable.data.CredentialStore
@@ -92,6 +96,7 @@ import com.seu.timetable.ui.theme.ThemeMode
 import com.seu.timetable.util.DebugLog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -634,8 +639,33 @@ private fun MainScaffold(
 
     // 周次状态提到本层，切换 tab 后返回时不会丢失（规格第 8 章交互清单）。
     // key 用课表 id：切换课表后周次必须重算，沿用上一张课表的周次会越界。
+    //
+    // 初值取自 `timetable.currentWeek`（`repo.open()` 按当天算出）。
+    // 它是**快照**而非派生值：算完就不再变，而「今天」会走。故须配下面的前台校正
+    // （见 [OnResume] 那段），否则周日开着课表页、周一再回来仍停在第 1 周。
     var week by remember(meta.id) {
         mutableIntStateOf(timetable.currentWeek.coerceIn(1, timetable.displayedWeeks))
+    }
+
+    // 每次回到前台，把周次校正到「今天所在的周」。
+    //
+    // 为何是这个时机，而不是让周次变成随日期自动推演的派生值：
+    // 后者会让用户手动翻到的周在跨 0 点时被悄悄夺走——用户正在看第 5 周，
+    // 过了午夜突然跳回第 3 周，比"不切"更让人困惑。
+    //
+    // 选「回前台」作校正点，是因为它同时满足两端：
+    //  - 前台驻留期间用户翻到哪一周就是哪一周，不被干涉；
+    //  - 一旦离开过（切走、锁屏、杀进程），回来时看到的必然是当前周。
+    // 而"离开过"正是最可能出现跨周的时机（睡前看课表、第二天早上再看）。
+    //
+    // 放在 MainScaffold 而不放到 TimetablePage：周次状态归本层所有
+    // （切 tab 不丢），校正也应落在同一层，避免状态与校正分处两地。
+    OnResume {
+        val todayWeek = meta.term.weekOf(LocalDate.now()).coerceIn(1, timetable.displayedWeeks)
+        if (week != todayWeek) {
+            DebugLog.i("回前台：周次由第 $week 周校正为第 $todayWeek 周")
+            week = todayWeek
+        }
     }
     var screen by remember(meta.id) { mutableStateOf<Screen>(Screen.Home) }
 
@@ -1152,5 +1182,47 @@ private fun formatImportTime(millis: Long?): String {
         today -> "今天 " + at.format(DateTimeFormatter.ofPattern("HH:mm"))
         today.minusDays(1) -> "昨天 " + at.format(DateTimeFormatter.ofPattern("HH:mm"))
         else -> at.format(IMPORT_TIME_FORMAT)
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * 每次宿主 Activity **回到前台**时执行一次 [block]。
+ *
+ * ## 为什么不用 `LaunchedEffect` 凑合
+ *
+ * `LaunchedEffect(Unit)` 只在进入组合时跑一次；Activity 走完 onPause/onStop/onResume
+ * 再回到前台，组合并没有被销毁重建（Compose 不会因为前后台切换重组），
+ * 所以那些"进 App 就跑一次"的副作用**不会重跑**。
+ *
+ * 跨周这种"随时间推移才成立"的条件恰好需要「回来了就重查一次」，
+ * 靠 `LaunchedEffect` 必然漏掉——它只在进程重建时才对，属于碰运气。
+ *
+ * ## 为什么用 `repeatOnLifecycle`
+ *
+ * `LifecycleEventObserver` + `ON_RESUME` 也能实现，但会遇到两个坑：
+ *  1. 订阅的那一刻若生命周期**已处于** RESUMED，`ON_RESUME` 事件不会再补发，
+ *     于是首次进入前台反而漏掉一次；
+ *  2. 观察者不会自动随组合一起注销，得手写 `DisposableEffect` 的 onDispose。
+ *
+ * `repeatOnLifecycle(RESUMED)` 两者都解决了：进入 RESUMED 时启动、
+ * 离开时取消；挂起块在首次进入时**立即执行一次**（正是想要的语义），
+ * 且随 `LaunchedEffect` 的协程一起被回收。
+ *
+ * @param block 每次回到前台执行。它会被反复调用，须是幂等的。
+ */
+@Composable
+private fun OnResume(block: () -> Unit) {
+    val owner = LocalLifecycleOwner.current
+
+    // 用 rememberUpdatedState 接住最新的 block：否则 block 里捕获的变量
+    // 会被固定在 LaunchedEffect 首次组合时的那一份，读到过期的值。
+    val current by rememberUpdatedState(block)
+
+    LaunchedEffect(owner) {
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            current()
+        }
     }
 }

@@ -320,4 +320,104 @@ class DomainRulesTest {
         val ids = t.sessions.map { t.courseOf(it)!!.id }.toSet()
         assertEquals("两个时段必须指向同一门课", setOf("c1"), ids)
     }
+
+    // ---------------- 周次推算（课表页「回前台校正」的依据） ----------------
+
+    /**
+     * 周次必须以**周一**为界切换，而不是按天累加。
+     *
+     * 这条是课表页周次显示的地基：若边界错了，用户会在周日晚看到「第 2 周」，
+     * 或周一早上还停在第 1 周——表现得像"自动切周失效"。
+     */
+    @Test
+    fun `周次在周一跨周`() {
+        val t = term()  // firstMonday = 2026-09-21
+
+        assertEquals(1, t.weekOf(LocalDate.of(2026, 9, 21)))  // 第 1 周周一
+        assertEquals(1, t.weekOf(LocalDate.of(2026, 9, 27)))  // 第 1 周周日
+        assertEquals(2, t.weekOf(LocalDate.of(2026, 9, 28)))  // 第 2 周周一 ★
+        assertEquals(2, t.weekOf(LocalDate.of(2026, 10, 4)))  // 第 2 周周日
+        assertEquals(3, t.weekOf(LocalDate.of(2026, 10, 5)))  // 第 3 周周一
+    }
+
+    /** 整个跨周区间内，每一天的周次都必须与它所属的那一周一致。 */
+    @Test
+    fun `整周七天周次一致`() {
+        val t = term()
+        for (day in 0..6) {
+            val d = LocalDate.of(2026, 9, 21).plusDays(day.toLong())
+            assertEquals("9/21 起第 $day 天应属第 1 周", 1, t.weekOf(d))
+        }
+        for (day in 0..6) {
+            val d = LocalDate.of(2026, 9, 28).plusDays(day.toLong())
+            assertEquals("9/28 起第 $day 天应属第 2 周", 2, t.weekOf(d))
+        }
+    }
+
+    /**
+     * 开学前的日期：算出的是 0 或负数，调用方须 `coerceAtLeast(1)`。
+     *
+     * ## 注意「开学前不满一周」与「满一周」的结果不同
+     *
+     * 实现是 `(days / 7).toInt() + 1`，而 **Kotlin 的整数除法是向零取整**
+     * （不是向下取整——这一点极易看错）：
+     *
+     * | 日期相对 firstMonday | days | days/7 | 结果 |
+     * | --- | --- | --- | --- |
+     * | 前一天 | −1 | 0 | **1** |
+     * | 前七天 | −7 | −1 | 0 |
+     * | 前十四天 | −14 | −2 | −1 |
+     *
+     * 于是「开学前 1~6 天」会算出第 1 周（而非第 0 周），
+     * 只有开学前满 7 天才真的落到 0 或以下。夹紧仍是必要的，
+     * 但别误以为它防的是「开学前每一天」。
+     */
+    @Test
+    fun `开学前算出非正数 调用方须夹到第 1 周`() {
+        val t = term()  // firstMonday = 2026-09-21
+
+        // 向零取整：开学前不满 7 天 → 落在第 1 周（不是第 0 周）
+        assertEquals(1, t.weekOf(LocalDate.of(2026, 9, 20)))   // 前一天
+        assertEquals(1, t.weekOf(LocalDate.of(2026, 9, 15)))   // 前六天
+
+        // 满 7 天才落到 0 及以下
+        assertEquals(0, t.weekOf(LocalDate.of(2026, 9, 14)))   // 前七天
+        assertEquals(-1, t.weekOf(LocalDate.of(2026, 9, 7)))   // 前十四天
+
+        // 调用方按约定夹紧
+        assertEquals(1, t.weekOf(LocalDate.of(2026, 9, 14)).coerceAtLeast(1))
+        assertEquals(1, t.weekOf(LocalDate.of(2026, 9, 7)).coerceAtLeast(1))
+    }
+
+    /**
+     * `dateOf` 与 `weekOf` 必须互为逆运算。
+     *
+     * 表头日期（`dateOf`）与当前周判定（`weekOf`）是两套独立路径，
+     * 若二者不一致，会出现"表头日期属于第 2 周、但页面显示第 1 周"这种
+     * 自相矛盾的画面——用户一眼能看出不对，却很难描述。
+     */
+    @Test
+    fun `dateOf 与 weekOf 互逆`() {
+        val t = term()
+        for (week in 1..16) {
+            for (dayOfWeek in 1..7) {
+                val d = t.dateOf(week, dayOfWeek)
+                assertEquals(
+                    "第 $week 周周 $dayOfWeek 的日期 ${d} 应反解回第 $week 周",
+                    week,
+                    t.weekOf(d),
+                )
+            }
+        }
+    }
+
+    /** 表头日期取的是「所选周」而非「今天那一周」——翻周时日期要跟着走。 */
+    @Test
+    fun `表头日期随所选周变化`() {
+        val t = term()
+        assertEquals(LocalDate.of(2026, 9, 21), t.dateOf(1, 1))   // 第 1 周周一
+        assertEquals(LocalDate.of(2026, 9, 27), t.dateOf(1, 7))   // 第 1 周周日
+        assertEquals(LocalDate.of(2026, 9, 28), t.dateOf(2, 1))   // 第 2 周周一
+        assertEquals(LocalDate.of(2026, 9, 23), t.dateOf(1, 3))   // 第 1 周周三
+    }
 }

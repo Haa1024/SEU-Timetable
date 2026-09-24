@@ -85,6 +85,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.activity:activity-compose:1.9.2")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+    // 显式声明：本地已从它取 LocalLifecycleOwner（做「回前台」生命周期感知）。
+    // 它本来是 activity-compose 的传递依赖，运行时早已在包里，此举不增体积；
+    // 写出来只为防上游哪天不再传递，导致 import 无声失效。
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.6")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.6")
 
     implementation("androidx.compose.ui:ui")
