@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  网络安全配置。
+
+  学校统一身份认证回跳时 `service` 参数为 http://（服务端配置，客户端不可改）：
+
+      GET https://ehall.seu.edu.cn/jwapp/sys/wdkb/*default/index.do
+      → 302 Location: https://auth.seu.edu.cn/dist/#/dist/main/login
+                        ?service=http%3A%2F%2Fehall.seu.edu.cn%2F...   ← http
+  登录成功后按该 service 回跳：
+
+      http://ehall.seu.edu.cn/jwapp/sys/wdkb/*default/index.do?...&ticket=ST-xxxx
+
+  Android 自 targetSdk 28 起默认禁止明文 HTTP，WebView 会以
+  `net::ERR_CLEARTEXT_NOT_PERMITTED` 中断，表现为「登录成功却跳不回来」。
+
+  放行安全：该 http 地址本身不返回内容，仅做 302 升级为 https，票据最终在 https 上校验；
+  且仅对 seu.edu.cn 开放，其余域名仍禁止明文。
+-->
+<network-security-config>
+
+    <!-- 默认禁止明文，不得改为 true。 -->
+    <base-config cleartextTrafficPermitted="false" />
+
+    <!-- 唯一例外：学校域名。服务端自行升级到 https，此处仅让该次 302 通过。 -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">seu.edu.cn</domain>
+    </domain-config>
+
+</network-security-config>

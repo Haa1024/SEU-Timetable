@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 启动图标底色：白底（对勾为东大绿）。 -->
+    <color name="ic_launcher_background">#FFFFFF</color>
+
+    <!-- 图标前景用色 -->
+    <color name="ic_launcher_check_front">#4C7D2C</color>
+    <color name="ic_launcher_check_back">#AECB95</color>
+</resources>

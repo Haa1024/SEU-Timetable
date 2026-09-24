@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色模式下用深底，避免冷启动时闪一下白屏 -->
+    <style name="Theme.SeuTimetable" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#121318</item>
+    </style>
+</resources>

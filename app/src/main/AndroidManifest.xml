@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!--
+      「桌面快捷方式」类权限。各 ROM 用自己的权限名保护"应用主动添加桌面项目"，
+      故各家各声明一条：
+        · com.android.launcher.permission.INSTALL_SHORTCUT —— AOSP 系，MIUI 13 及以下必需；
+        · oplus.permission.pin_shortcut —— OPPO / realme 桌面（OplusLauncher）私有；
+        · com.bbk.launcher2.permission.JUMP_ORIGIN —— vivo 原子组件库（官方适配指引要求）。
+      诚实记录：在 ColorOS 15 上这条 oplus 权限声明了、也已授予，仍会被拒绝。原因是 ColorOS 的
+      AddItemActivity.isAllowedAddWidget() 实际检查的是它自家的应用白名单（系统应用 /
+      预装应用 / 持有 oplus.permission.OPLUS_COMPONENT_SAFE / 命中 WidgetControlHelper
+      白名单之一），而非这条权限。保留声明只为兼容其他 ROM 与旧版本 ColorOS，
+      并确保权限列表里如实出现"桌面快捷方式"这一项。
+    -->
+    <uses-permission android:name="com.android.launcher.permission.INSTALL_SHORTCUT" />
+    <uses-permission android:name="oplus.permission.pin_shortcut" />
+    <uses-permission android:name="com.bbk.launcher2.permission.JUMP_ORIGIN" />
+
+    <!--
+      包可见性声明（targetSdk 30 起必须显式声明，否则这两家的东西我们"看不见"）：
+        · 小米：「小部件中心」的能力探测接口所在进程。不声明的话 contentResolver.call()
+          会把该 Provider 当成不存在，探测永远得到"不支持"，小米那条详情页分支就成了死代码；
+        · vivo：原子组件库。不声明的话 resolveActivity() 恒为 null，「去组件库添加」按钮
+          永远不会出现。
+      两条都只是读能力 / 发起跳转，不涉及读取对方数据。
+    -->
+    <queries>
+        <provider android:authorities="com.miui.personalassistant.widget.external" />
+        <package android:name="com.bbk.launcher2" />
+    </queries>
+
+    <!-- 上课提醒：Android 13（API 33）起发通知需用户授权 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 开机后重排闹钟：系统重启会清掉所有已排的闹钟 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!--
+      精确闹钟（Android 12 起需要）。未获授权时提醒会自动退化为「大致准点」而不是不响，
+      见 ReminderScheduler.canScheduleExact。
+      这里刻意用 SCHEDULE_EXACT_ALARM 而非 USE_EXACT_ALARM：后者虽是自动授予的，
+      但仅限闹钟与日历类应用；课表提醒不属于那一类，错用会被应用商店驳回。
+    -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+
+    <!--
+      应用内更新：下载完 APK 后拉起系统安装器。
+
+      注意这条是**特殊权限**，与 POST_NOTIFICATIONS 那类运行时权限不同：
+      装上应用后系统不会自动授予，也不能弹窗申请，用户必须到
+      「设置 → 应用 → 特殊应用权限 → 安装未知应用」里手动打开。
+      未授权时 startActivity(ACTION_VIEW) 会被系统静默拒绝（不报错也不弹界面），
+      所以调用前必须先用 canRequestPackageInstalls() 查一遍，见 ApkInstaller.canInstall。
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
+      写外部存储（更新下载用）。
+
+      为什么需要：DownloadManager 的 setDestinationInExternalPublicDir 把 APK 写进
+      公共 Downloads 目录，在 **API 28 及以下**这条路要求调用方持有 WRITE_EXTERNAL_STORAGE，
+      否则 enqueue 直接抛 SecurityException。本应用 minSdk=26，所以必须声明。
+
+      为什么用 maxSdkVersion=28：API 29 起应用对公共目录的写入不再需要该权限
+      （分区存储），此时声明反而会在权限列表里多出一个"存储"条目，白白引起用户疑虑。
+      限定上限即可两全。
+
+      运行时行为：仅在 API 26..28 上需要动态申请，见 ApkInstaller.ensureStoragePermission。
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <application
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.SeuTimetable">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.SeuTimetable">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          校园登录页。默认显示账号密码表单，门户页在背后隐身运行——
+          ehall 的授权 cookie 只认「从门户点入」的事务，那一步只能交给网页 JS（见 LoginActivity）。
+          密码是否留存由用户在表单上勾选；勾选时经 Android Keystore 加密后落盘。
+        -->
+        <activity
+            android:name=".ui.LoginActivity"
+            android:exported="false"
+            android:label="登录校园账号"
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.SeuTimetable" />
+
+        <!--
+          桌面小组件。AppWidgetProvider 本质是广播接收器，两个尺寸各注册一次。
+          exported=false 即可：更新广播由系统与自身进程发出，不需要接受外部应用广播。
+        -->
+        <receiver
+            android:name=".widget.TodayWidgetSmall"
+            android:exported="false"
+            android:label="@string/widget_today_2x2_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_today_2x2_info" />
+        </receiver>
+
+        <receiver
+            android:name=".widget.TodayWidgetWide"
+            android:exported="false"
+            android:label="@string/widget_today_4x2_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_today_4x2_info" />
+        </receiver>
+
+        <!--
+          「一键添加」的成功回调接收器：桌面把小工具放到桌面上之后，会发送当初交给它的
+          PendingIntent，落到这里。这是唯一由系统背书的成功信号。
+
+          exported=false 足够，而且正是这里想要的：Intent 由本应用创建的 PendingIntent 投递，
+          别人没有它，也就无从伪造「已添加」。故不需要额外权限保护。
+        -->
+        <receiver
+            android:name=".widget.WidgetPinResultReceiver"
+            android:exported="false" />
+
+        <!--
+          上课提醒。同一个接收器兼管两件事：闹钟到点（ACTION_REMIND，由本 App 自己发）
+          与需要重排的系统广播（开机、改时间 / 改时区、跨日、覆盖安装）。
+
+          改时间与时区也要重排：RTC 闹钟存的是绝对毫秒数，时区一变，
+          原来的时刻就不再对应「上课前 15 分钟」。
+
+          exported=false 即可——系统以显式组件投递系统广播，能穿透 non-exported。
+        -->
+        <receiver
+            android:name=".reminder.ReminderReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.DATE_CHANGED" />
+            </intent-filter>
+        </receiver>
+        <!--
+          更新用的 FileProvider。
+
+          Android 7 起，把文件的 file:// 路径跨进程交给安装器会触发 StrictMode 的
+          FileUriExposedException，安装界面根本不会出现。FileProvider 把文件以
+          content:// 暴露，并由 grantUriPermissions 把读权限临时授给安装器进程，
+          是唯一被允许的做法。
+
+          authorities 用 ${applicationId} 拼接，避免硬编码包名——若将来改 applicationId
+          或加产物后缀（如 debug 版 com.seu.timetable.debug），不需要同步改这里，
+          ApkInstaller 里也是按 packageName 推出来的，两边自动一致。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+    </application>
+
+</manifest>

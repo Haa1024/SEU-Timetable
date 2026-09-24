@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 起系统会用自己的圆角半径裁剪所有小组件，
+  自绘背景若沿用固定值会出现"双层圆角"错位，故直接取系统值。
+  该 dimension 仅存在于 API 31+，低版本由 values/dimens.xml 兜底。
+-->
+<resources>
+    <dimen name="widget_corner_radius">@android:dimen/system_app_widget_background_radius</dimen>
+</resources>

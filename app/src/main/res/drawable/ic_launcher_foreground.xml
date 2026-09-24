@@ -1,0 +1,39 @@
+<!--
+  自适应图标前景：两层对勾。
+
+  构图：白色底 + 两个错位对勾。后层用浅绿充当投影，前层用东大绿标准色。
+  画布 108x108，可见区域为中心 72x72，安全区 66x66（即 21..87），
+  全部笔画落在以画布中心为心、半径 36 的圆内，圆形、圆角方形、水滴形遮罩均不裁切。
+
+  造型：线端取平头（butt）、拐角取尖角（miter），线宽 12，
+  使对勾呈方正硬朗的形态；若改为 round 端与圆角，会明显偏细软。
+
+  两层形状与线宽相同，仅偏移 (-8,-9)，约为线宽的 67%，
+  两层之间有清晰的空隙，缩至 36px 时仍可辨认层次。
+
+  绘制顺序不可颠倒：VectorDrawable 中后声明的路径位于上层。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 后层：浅绿，向左上偏移 -->
+    <path
+        android:pathData="M28,50.5 L43,65.5 L71.5,30"
+        android:strokeColor="#AECB95"
+        android:strokeWidth="12"
+        android:strokeLineCap="butt"
+        android:strokeLineJoin="miter"
+        android:fillColor="#00000000" />
+
+    <!-- 前层：东大绿标准色 #4C7D2C -->
+    <path
+        android:pathData="M36,59.5 L51,74.5 L79.5,39"
+        android:strokeColor="#4C7D2C"
+        android:strokeWidth="12"
+        android:strokeLineCap="butt"
+        android:strokeLineJoin="miter"
+        android:fillColor="#00000000" />
+</vector>

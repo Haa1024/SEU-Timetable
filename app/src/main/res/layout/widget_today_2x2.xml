@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  今日课程小组件 · 2×2。
+
+  与 4×2 的 id 集合完全一致（含 widget_room_*），差别只在行结构与外距、字号、默认可见性，
+  为的是让两个尺寸共用同一份渲染代码（TodayWidget.kt）。
+
+  行结构差异：2×2 实测可用宽约 123dp，扣掉时刻 34dp 与色条间距 13dp 后课名只剩约 76dp，
+  再塞教室就放不下了，故每行改为**两行文字**——上行时刻 + 课名，下行教室
+  （缩进 47dp 对齐课名，10sp 次要色）。
+  行高相应取 34dp（= 上行 18dp + 下行一行文字），须与 TodayWidget.ROW_HEIGHT_DP_SMALL 一致，
+  渲染层按它换算可见行数；每行比 4×2 多占 8dp，等价于少换一行，这是显示教室要付的代价。
+  widget_room_N 在这里默认 gone，由渲染层按 showRoom 决定是否显示。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="10dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_board_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:singleLine="true"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/widget_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:singleLine="true"
+            android:textColor="@color/widget_text_primary"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_weekday"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:singleLine="true"
+            android:textColor="@color/widget_primary"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/widget_week"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:singleLine="true"
+            android:textColor="@color/widget_text_secondary"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="7dp"
+        android:background="@color/widget_divider" />
+
+    <LinearLayout
+        android:id="@+id/widget_rows"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="3dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/widget_row_1"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_time_1"
+                    android:layout_width="34dp"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_secondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/widget_bar_1"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/widget_primary" />
+
+                <TextView
+                    android:id="@+id/widget_name_1"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_room_1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="47dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_row_2"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_time_2"
+                    android:layout_width="34dp"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_secondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/widget_bar_2"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/widget_primary" />
+
+                <TextView
+                    android:id="@+id/widget_name_2"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_room_2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="47dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_row_3"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_time_3"
+                    android:layout_width="34dp"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_secondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/widget_bar_3"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/widget_primary" />
+
+                <TextView
+                    android:id="@+id/widget_name_3"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_room_3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="47dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_row_4"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_time_4"
+                    android:layout_width="34dp"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_secondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/widget_bar_4"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/widget_primary" />
+
+                <TextView
+                    android:id="@+id/widget_name_4"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_room_4"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="47dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_row_5"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_time_5"
+                    android:layout_width="34dp"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_secondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/widget_bar_5"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/widget_primary" />
+
+                <TextView
+                    android:id="@+id/widget_name_5"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_room_5"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="47dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/widget_row_6"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="18dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_time_6"
+                    android:layout_width="34dp"
+                    android:layout_height="wrap_content"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_secondary"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/widget_bar_6"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@color/widget_primary" />
+
+                <TextView
+                    android:id="@+id/widget_name_6"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:singleLine="true"
+                    android:textColor="@color/widget_text_primary"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_room_6"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="47dp"
+                android:ellipsize="end"
+                android:singleLine="true"
+                android:textColor="@color/widget_text_secondary"
+                android:textSize="10sp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_empty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/widget_footer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:textColor="@color/widget_text_secondary"
+        android:textSize="11sp" />
+</LinearLayout>

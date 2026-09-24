@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      只做「窗口底色 + 无 ActionBar」这一件事，配色全部交给 Compose 的 MaterialTheme。
+      这样 XML 主题不需要引入 com.google.android.material 依赖。
+    -->
+    <style name="Theme.SeuTimetable" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FBF9FC</item>
+    </style>
+</resources>

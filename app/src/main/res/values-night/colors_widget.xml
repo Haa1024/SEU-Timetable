@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面小组件专用色值（深色）。与 DarkSeuColors 一致：主色提亮，否则深底上发闷。 -->
+<resources>
+    <color name="widget_surface">#171A1F</color>
+    <color name="widget_border">#272D26</color>
+    <color name="widget_divider">#272D26</color>
+    <color name="widget_text_primary">#F2F2F7</color>
+    <color name="widget_text_secondary">#99A1AD</color>
+    <color name="widget_primary">#6EA64C</color>
+    <color name="widget_ongoing_bg">#1D2B15</color>
+</resources>

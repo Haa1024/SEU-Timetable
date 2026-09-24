@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  桌面小组件专用色值（浅色）。与 ui/theme/Theme.kt 的 LightSeuColors 保持一致。
+
+  单独抽一份而非直接复用的原因：小组件由桌面进程按 XML 布局渲染，
+  拿不到 Compose 的 LocalSeuColors，只能走资源系统。
+  深浅色由 values-night 提供同名的另一套取值，布局无需感知主题。
+-->
+<resources>
+    <color name="widget_surface">#FFFFFF</color>
+    <color name="widget_border">#E6EAE1</color>
+    <color name="widget_divider">#E6EAE1</color>
+    <color name="widget_text_primary">#14171A</color>
+    <color name="widget_text_secondary">#707580</color>
+    <color name="widget_primary">#4C7D2C</color>
+    <color name="widget_ongoing_bg">#EFF4E9</color>
+</resources>

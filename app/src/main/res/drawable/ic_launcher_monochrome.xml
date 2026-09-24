@@ -1,0 +1,30 @@
+<!--
+  单色前景（Android 13+ 主题图标）。
+
+  系统只取本图的 alpha 通道再统一着色，因此这里用纯黑绘制、
+  靠 alpha 区分前后两层（后层 55%），保证主题图标模式下仍保留层次。
+  几何与 ic_launcher_foreground 一致。
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M28,50.5 L43,65.5 L71.5,30"
+        android:strokeColor="#000000"
+        android:strokeAlpha="0.55"
+        android:strokeWidth="12"
+        android:strokeLineCap="butt"
+        android:strokeLineJoin="miter"
+        android:fillColor="#00000000" />
+
+    <path
+        android:pathData="M36,59.5 L51,74.5 L79.5,39"
+        android:strokeColor="#000000"
+        android:strokeWidth="12"
+        android:strokeLineCap="butt"
+        android:strokeLineJoin="miter"
+        android:fillColor="#00000000" />
+</vector>

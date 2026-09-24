@@ -1,0 +1,40 @@
+*.iml
+.gradle/
+/local.properties
+/keystore/
+/.idea/
+/build/
+/app/build/
+/captures/
+.externalNativeBuild
+.cxx
+.DS_Store
+
+# ---- 签名材料：绝不入库 ----
+# 密钥库一旦进 Git，即便后续删除，历史提交里依然可被取出，
+# 而 Android 的更新链又强绑定同一把钥匙（换钥匙 = 老用户无法覆盖安装），
+# 所以这里必须从第一次提交起就挡住。
+*.jks
+*.keystore
+*.pepk
+keystore.properties
+
+# ---- 本地调试/临时产物 ----
+# 这些是开发过程中的一次性材料（截图、探针、临时脚本、注释备份），
+# 对使用者没有意义，进库只会让仓库变胖、让 diff 变吵。
+/_bak_comments/
+/_probe/
+/_shots/
+/_tools/
+/.kotlin/
+
+# ---- 构建输出：Release 包由 GitHub Release 分发，不靠仓库 ----
+# releases/ 里是构建产物（单包 11MB+），且可用源码重新构建，
+# 提交进 Git 会让每次发版都往历史里塞一份二进制。
+/releases/
+
+# ---- IDE / 编辑器 ----
+*.swp
+*.swo
+*~
+.vscode/

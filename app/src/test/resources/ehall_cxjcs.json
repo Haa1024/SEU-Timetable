@@ -1,0 +1,46 @@
+{
+ "datas": {
+  "cxjcs": {
+   "totalSize": 1,
+   "pageSize": 999,
+   "rows": [
+    {
+     "BY6": null,
+     "BY5": null,
+     "BY4": null,
+     "BY3": null,
+     "WID": "4bbc8aec21884a76ba2e2213a98b3c58",
+     "XQ": "2",
+     "BY2": null,
+     "BY1": null,
+     "ORDERFILTER": null,
+     "XN": "2026-2027",
+     "SFSY": 1,
+     "XNMC": null,
+     "XQMC": null,
+     "SFJJ": 5,
+     "XQKSRQ": "2026-09-21 00:00:00",
+     "RZLBDM": null,
+     "XSLBMC": null,
+     "WSJJ": 3,
+     "XXXQ": null,
+     "BY7": null,
+     "BY8": null,
+     "BY9": null,
+     "XFJJ": 5,
+     "PX": null,
+     "XSLBDM": null,
+     "BY10": null,
+     "ZZC": 18,
+     "ZJXZC": 16
+    }
+   ],
+   "extParams": {
+    "logId": "d69d6c51f91d4deaa0fdf70758f1b751",
+    "code": 1,
+    "totalPage": 1
+   }
+  }
+ },
+ "code": "0"
+}

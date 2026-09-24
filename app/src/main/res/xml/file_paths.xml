@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 可对外暴露的路径白名单。
+
+  只开一个：外部存储的 Downloads 目录（DownloadManager 的下载落点）。
+  范围刻意收得极小——FileProvider 暴露的每个目录都等于把该目录的读取能力
+  临时授给拿到 URI 的应用，多开一条就多一分风险，而更新只需要这一个。
+
+  用 <external-path> 而非 <external-files-path>：DownloadManager 的
+  setDestinationInExternalPublicDir 写的是公共 Downloads，属 external-path。
+  两者在 XML 里名字相近但指向完全不同的目录，写错会以
+  "Failed to find configured root" 报错。
+-->
+<paths>
+    <external-path
+        name="downloads"
+        path="Download/" />
+</paths>

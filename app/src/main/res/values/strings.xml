@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SEU 课表</string>
+
+    <!-- 桌面小组件 -->
+    <string name="widget_today_2x2_name">今日课程</string>
+    <string name="widget_today_4x2_name">今日课程 · 横幅</string>
+    <string name="widget_today_desc">显示今天尚未结束的课程，已经上完的自动隐藏</string>
+    <string name="widget_footer_remaining">今天还有 %1$d 节 · 第 %2$d 周</string>
+    <string name="widget_week">第 %1$d 周</string>
+    <string name="widget_unknown_course">未知课程</string>
+
+    <!--
+      空态俏皮文案，今日页与桌面小组件共用（见 util/PlayfulTalk）。
+
+      格式为「颜文字 + \n + 正文」：今日页拆成两行分别排版，小组件整体居中显示。
+      同一组内多条按 30 分钟轮换。
+
+      注意：颜文字内不可出现 < & ' " 四个字符，XML 与 Android 字符串资源需要转义。
+    -->
+    <string-array name="playful_no_class">
+        <item>(￣▽￣)ノ\n今天没有课，放心休息</item>
+        <item>(๑•̀ㅂ•́)و✧\n今天没课，学习还是摸鱼，你说了算</item>
+        <item>( ´ ▽ ` )\n今天没有课，可以睡到自然醒</item>
+        <item>(・ω・)\n今天课表干干净净，出门走走吧</item>
+        <item>ʕ•ᴥ•ʔ\n今天没有课，时间属于你自己</item>
+        <item>( ﾟ∀ﾟ)\n今天没有课，慢慢吃顿饭</item>
+    </string-array>
+
+    <string-array name="playful_weekend">
+        <item>(￣▽￣)ノ\n周末没有课，休息优先</item>
+        <item>(・∀・)\n周末到了，课表也放假了</item>
+        <item>ʕ•ᴥ•ʔ\n周末没有课，做点什么都好</item>
+        <item>( ﾟ∀ﾟ)\n周末没有课，睡个懒觉吧</item>
+    </string-array>
+
+    <string-array name="playful_all_done">
+        <item>(๑•̀ㅂ•́)و✧\n今天的课都上完了，辛苦了</item>
+        <item>(￣ω￣)\n今天的课全部结束，可以松口气了</item>
+        <item>(・ω・)\n今天的课已经上完，慢一点也没关系</item>
+        <item>╮(╯▽╰)╭\n今天的课上完了，放松一下</item>
+        <item>( ﾟ∀ﾟ)\n今天的课全部打勾，收工</item>
+    </string-array>
+
+    <!--
+      上课提醒。
+
+      reminder_title 的两个参数：课程名、节次（如「数据结构 · 第 3-4 节」）。
+      body 里的分钟数用「提前量」而非"此刻距上课还有多久"——通知是在提醒时刻那一刻发的，
+      届时距上课正好是提前量。
+    -->
+    <string name="reminder_channel_name">上课提醒</string>
+    <string name="reminder_channel_desc">每节课开始前提醒一次</string>
+    <string name="reminder_unknown_course">有课</string>
+    <string name="reminder_title">%1$s · %2$s</string>
+    <string name="reminder_body">%1$s 开始，还有 %2$d 分钟</string>
+    <string name="reminder_body_room">%1$s 开始，还有 %2$d 分钟 · %3$s</string>
+    <!-- 测试通知：近两周无课可提醒时也允许用户体验样式，用固定示例内容 -->
+    <string name="reminder_sample_title">上课提醒 · 示例</string>
+    <string name="reminder_sample_body">数据结构 · 第 3-4 节 14:00 开始，还有 15 分钟</string>
+
+    <string-array name="playful_no_board">
+        <item>(・ω・)\n还没有课表，点一下就能导入</item>
+        <item>(￣▽￣;)\n课表还是空的，点击开始吧</item>
+        <item>(๑•̀ㅂ•́)و✧\n先把课表导进来吧</item>
+    </string-array>
+
+    <!--
+      应用内更新。
+
+      文案取向：把「检查失败」与「已是最新」明确分开说。网络在校园网 / 移动数据下
+      未必总能连上更新源，如果失败也回一句"已是最新"，用户会以为检查真的成功了，
+      之后发现没提示更新只会更困惑。
+    -->
+    <string name="update_title">检查更新</string>
+    <string name="update_checking">正在检查…</string>
+    <string name="update_uptodate">已是最新版本</string>
+    <string name="update_failed">暂时连不上更新服务器</string>
+    <string name="update_failed_hint">稍后再试即可，不影响课表和其他功能</string>
+    <string name="update_available">发现新版本 %1$s</string>
+    <string name="update_downloading">正在下载…</string>
+    <string name="update_download_failed">下载没成功，请稍后再试</string>
+    <string name="update_need_permission">需要先允许安装应用</string>
+    <string name="update_need_permission_body">系统默认不允许本应用安装软件。请在接下来打开的页面里打开开关，回来后再点一次安装。</string>
+    <string name="update_go_settings">去打开</string>
+    <string name="update_install">安装</string>
+    <string name="update_install_now">立即更新</string>
+    <string name="update_skip">稍后</string>
+    <string name="update_retry">重试</string>
+    <string name="update_version_row">版本</string>
+</resources>

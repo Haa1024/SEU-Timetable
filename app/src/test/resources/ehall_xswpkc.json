@@ -1,0 +1,72 @@
+{
+ "datas": {
+  "xswpkc": {
+   "totalSize": 2,
+   "rows": [
+    {
+     "BY6": null,
+     "XS": 8,
+     "KKDWDM": "100483",
+     "BY5": null,
+     "BY4": null,
+     "BY3": null,
+     "WID": null,
+     "BY2": null,
+     "BY1": null,
+     "KXH": "07",
+     "XH": "000000000",
+     "SKZC": "7-14周",
+     "RZLBDM": null,
+     "ORDERFILTER": null,
+     "SKJS": "徐广田",
+     "JSH": null,
+     "BJDM": null,
+     "XF": 0,
+     "BY7": null,
+     "XNXQDM": "2026-2027-2",
+     "BY8": null,
+     "KCM": "形势与政策(5)",
+     "BY9": null,
+     "BY10": null,
+     "JXBID": "202620272B15M011007",
+     "KCH": "B15M0110"
+    },
+    {
+     "BY6": null,
+     "XS": 0,
+     "KKDWDM": "100381",
+     "BY5": null,
+     "BY4": null,
+     "BY3": null,
+     "WID": null,
+     "BY2": null,
+     "BY1": null,
+     "KXH": "01",
+     "XH": "000000000",
+     "SKZC": null,
+     "RZLBDM": null,
+     "ORDERFILTER": null,
+     "SKJS": null,
+     "JSH": null,
+     "BJDM": null,
+     "XF": 1,
+     "BY7": null,
+     "XNXQDM": "2026-2027-2",
+     "BY8": null,
+     "KCM": "社会实践",
+     "BY9": null,
+     "BY10": null,
+     "JXBID": "202620272B61G010001",
+     "KCH": "B61G0100"
+    }
+   ],
+   "extParams": {
+    "logId": "c26b22404d67475d845f7ab42641d80e",
+    "code": 1,
+    "totalPage": 0,
+    "msg": "查询成功"
+   }
+  }
+ },
+ "code": "0"
+}

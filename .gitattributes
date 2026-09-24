@@ -1,0 +1,19 @@
+# 统一换行符为 LF 存库。
+# Windows 下编辑器默认写 CRLF，若不归一，同一份文件在不同机器上会被认成"改过"，
+# 于是 diff 里满屏都是换行差异，真正的改动反而看不见。（`gradlew` 尤其重要：
+# 它是 shell 脚本，CRLF 会让 Linux/macOS 上报 `bad interpreter: /bin/sh^M`。）
+* text=auto eol=lf
+
+# 二进制文件不参与换行转换，也不要在 diff 里逐行比对
+*.jar  binary
+*.jks  binary
+*.apk  binary
+*.png  binary
+*.jpg  binary
+
+# Gradle wrapper 的 jar 必须原样保留
+gradle/wrapper/gradle-wrapper.jar binary
+
+# Windows 批处理必须保持 CRLF，否则 cmd 解析会出错
+*.bat  text eol=crlf
+*.cmd  text eol=crlf

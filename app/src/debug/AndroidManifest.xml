@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  仅 debug 构件的清单补丁，**不影响 release 包**。
+
+  为什么需要它：登录页（LoginActivity）在正式包里是 `exported="false"`（正确做法，
+  别人不能随便拉起它）。但调试时想单独跑一遍登录流程，就得能直接启动它：
+
+      adb shell am start -n com.seu.timetable/.ui.LoginActivity
+
+  而 `exported="false"` 时 adb shell（uid 2000）会被系统拒绝
+  （实测报 `SecurityException: ... not exported from uid ...`，即使应用是 debuggable）。
+
+  所以只在 debug 构件里把它打开。发布包仍由主清单的 `exported="false"` 生效。
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <activity
+            android:name=".ui.LoginActivity"
+            android:exported="true"
+            tools:replace="android:exported" />
+    </application>
+</manifest>

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  2×2 今日课程小组件。
+
+  - targetCellWidth/Height 是 Android 12+ 的按格子声明尺寸（对齐桌面网格，拖动时吸附到格），
+    12 以下自动退回 minWidth/minHeight（旧公式：70 × n − 30 dp）。
+  - updatePeriodMillis 取 1800000（30 分钟）＝系统允许的最小值，
+    用于兜底"跨天"（零点后要换一天）；日常刷新靠 App 侧主动推送，见 TodayWidget.refresh。
+  - previewLayout 需 API 31+；更低版本在小组件选择器里回退为应用图标。
+-->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_today_desc"
+    android:initialLayout="@layout/widget_today_2x2"
+    android:minHeight="110dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="110dp"
+    android:minWidth="110dp"
+    android:previewLayout="@layout/widget_today_2x2"
+    android:resizeMode="horizontal|vertical"
+    android:targetCellHeight="2"
+    android:targetCellWidth="2"
+    android:updatePeriodMillis="1800000"
+    android:widgetCategory="home_screen" />
