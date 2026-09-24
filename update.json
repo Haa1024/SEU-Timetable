@@ -1,7 +1,7 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0.0",
-  "apkUrl": "https://github.com/Haa1024/SEU-Timetable/releases/download/v1.0.0/SEU-Timetable-v1.0.0.apk",
-  "notes": "首个公开版本。\n\n• 课表从 ehall 网上办事大厅拉取后落为本机资产：离线可看、可增删改、可存多张\n• 双通路登录：表单模式在后台自动完成整条链路，网页模式留给需要手动处理的场景\n• 会话失效时按已保存的账号自动续期（密码经 Android Keystore 加密）\n• 桌面小组件「今日课程」（2×2 / 4×2）、上课提醒、浅色深色主题",
+  "versionCode": 2,
+  "versionName": "1.1.0",
+  "apkUrl": "https://github.com/Haa1024/SEU-Timetable/releases/download/v1.1.0/SEU-Timetable-v1.1.0.apk",
+  "notes": "登录链路重写：登录与续期不再依赖隐藏网页，改为纯 HTTP 直达校园系统。\n\n• 登录/续期速度大幅提升：跳过网页加载与页面点击，少一次完整页面渲染\n• 修复「会话建立后仍被退回网页登录」的问题（网关票据未被正确使用）\n• 修复空课表页登录入口延迟出现的问题：入口立即显示，不必等一次网络往返\n• 登录入口在「检查中」时也可见，冷启动时不再出现「找不到登录入口」的空课表页",
   "mandatory": false
 }

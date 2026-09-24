@@ -565,7 +565,14 @@ private fun EmptyLibraryView(
         Spacer(Modifier.height(24.dp))
         PrimaryButton("导入 / 新建课表", onNewBoard, Modifier.fillMaxWidth(0.72f))
 
-        if (sessionOk == false) {
+        // 登录入口在 `false`（未登录）与 `null`（**还在检查**）时都显示。
+        //
+        // 为何 `null` 也要显示：检查会话是一次真实网络请求（`dqxnxq.do`），
+        // 冷启动时还要先过零信任网关，要好几秒才出结果。若只在 `false` 时显示，
+        // 这几秒里用户看到的是一个"没有任何出路的空课表页"——想登录却找不到入口。
+        // 条件放宽后入口立刻就在，用户不必等一次网络往返；而检查结果是 `true`
+        // （已登录）时它又会自动收起来，不会误留一个多余入口。
+        if (sessionOk != true) {
             Spacer(Modifier.height(10.dp))
             Box(
                 Modifier

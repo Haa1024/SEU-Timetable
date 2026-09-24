@@ -34,8 +34,23 @@ internal const val CAS_SERVICE = "http://ehall.seu.edu.cn$EHALL_APP_PATH"
 /**
  * 纯服务端可走完的 SSO 入口。SPA 将 service 放在 `#` 片段后（片段不发服务器，
  * 换票需页面 JS）；`/login?service=` 由服务端 302 直达，不依赖 JS，可用 OkHttp 追链。
+ *
+ * ## 为什么 service 必须做「部分转义」（踩过，代价是一次完整的调试轮）
+ *
+ * [CAS_SERVICE] 里自带 `?EMAP_LANG=zh&THEME=`。若原样拼进 query，
+ * 那个 `&` 会被服务器当成 **`/login` 自己的参数分隔符**，于是 `service` 的值被
+ * 截断成 `...index.do?EMAP_LANG=zh`，`THEME` 另起一个参数。
+ * 后果是 ehall 认不出 service，**直接返回 200 首页而不是 302 到 CAS**——
+ * 现象极具迷惑性：链路「成功」了（HTTP 200），但一个 cookie 都没有，会话根本没建。
+ *
+ * 但也不能整体 URLEncoder：它会把 `*` 编成 `%2A`、`:` 编成 `%3A`，
+ * 而 CAS 认 service 是**逐字符比对**的（服务端下发的就是 `http://` + 字面 `*`），
+ * 差一字符就判成「发给别的服务的票」而静默失败。
+ *
+ * 故只转义 `?` 与 `&` 这两个会破坏 query 结构的字符，其余原样保留。
  */
-internal const val SSO_ENTRY = "$EHALL_BASE/login?service=$CAS_SERVICE"
+internal val SSO_ENTRY =
+    "$EHALL_BASE/login?service=" + CAS_SERVICE.replace("?", "%3F").replace("&", "%26")
 
 /** 换票链的最大跳数，防重定向死循环 */
 private const val MAX_SSO_HOPS = 12

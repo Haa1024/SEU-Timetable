@@ -33,8 +33,8 @@ android {
         applicationId = "com.seu.timetable"
         minSdk = 26          // API 26 起自带 java.time，免去 desugaring
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2         // 2：纯 HTTP 建会话（不再依赖 WebView）真机验证通过
+        versionName = "1.1.0"
     }
 
     buildTypes {
