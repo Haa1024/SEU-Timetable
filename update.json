@@ -1,7 +1,7 @@
 {
-  "versionCode": 2,
-  "versionName": "1.0.1-test",
-  "apkUrl": "https://github.com/Haa1024/SEU-Timetable/releases/download/v1.0.1-test/SEU-Timetable-v1.0.1-test.apk",
-  "notes": "测试版：用于验证应用内更新的完整链路。\n\n装完后请在「我的」页确认版本号显示为 1.0.1-test （2），\n即说明「检查 → 下载 → 授权 → 安装」四步都已走通。",
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  "apkUrl": "https://github.com/Haa1024/SEU-Timetable/releases/download/v1.0.0/SEU-Timetable-v1.0.0.apk",
+  "notes": "首个公开版本。\n\n• 课表从 ehall 网上办事大厅拉取后落为本机资产：离线可看、可增删改、可存多张\n• 双通路登录：表单模式在后台自动完成整条链路，网页模式留给需要手动处理的场景\n• 会话失效时按已保存的账号自动续期（密码经 Android Keystore 加密）\n• 桌面小组件「今日课程」（2×2 / 4×2）、上课提醒、浅色深色主题",
   "mandatory": false
 }

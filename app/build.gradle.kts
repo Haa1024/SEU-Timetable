@@ -33,11 +33,8 @@ android {
         applicationId = "com.seu.timetable"
         minSdk = 26          // API 26 起自带 java.time，免去 desugaring
         targetSdk = 35
-        // ⚠️ 测试用版本号，测完恢复为 versionCode = 1 / versionName = "1.0.0"
-        //    抬高 versionCode 才能让「检查更新」认为有新版可装；
-        //    versionName 带 -test 后缀，便于在 App 内确认装上的确实是测试包。
-        versionCode = 2
-        versionName = "1.0.1-test"
+        versionCode = 1
+        versionName = "1.0.0"
     }
 
     buildTypes {
