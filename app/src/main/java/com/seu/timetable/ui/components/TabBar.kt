@@ -32,6 +32,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import com.seu.timetable.ui.guide.GuideTargetKey
+import com.seu.timetable.ui.guide.guideTarget
 import com.seu.timetable.ui.theme.LocalSeuColors
 import com.seu.timetable.ui.theme.LocalSeuType
 
@@ -80,6 +82,10 @@ fun SeuTabBar(
         modifier
             .fillMaxWidth()
             .padding(start = 21.dp, end = 21.dp, top = 12.dp, bottom = bottomPadding)
+            // 引导锚点：整条导航栏作为「三个页面」一步的目标。
+            // 挂在 padding **之后**的 Modifier 链上，圈住的才是胶囊本身
+            // （含左右留白则洞会宽得离谱）。
+            .guideTarget(GuideTargetKey.TAB_BAR)
     ) {
         BoxWithConstraints(
             Modifier

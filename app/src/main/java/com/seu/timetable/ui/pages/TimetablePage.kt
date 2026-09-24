@@ -61,6 +61,8 @@ import com.seu.timetable.domain.PeriodSchedule
 import com.seu.timetable.domain.TermContext
 import com.seu.timetable.domain.Timetable
 import com.seu.timetable.ui.components.BackIcon
+import com.seu.timetable.ui.guide.GuideTargetKey
+import com.seu.timetable.ui.guide.guideTarget
 import com.seu.timetable.ui.components.CloseIcon
 import com.seu.timetable.ui.components.ForwardIcon
 import com.seu.timetable.ui.components.PlusIcon
@@ -206,6 +208,8 @@ fun TimetablePage(
                         .size(36.dp)
                         .clip(CircleShape)
                         .background(c.primary)
+                        // 引导锚点：本控件即「添加课程」的高亮目标。
+                        .guideTarget(GuideTargetKey.TIMETABLE_ADD)
                         .clickable { onAddClick() },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -285,6 +289,8 @@ private fun BoardSwitchChip(onClick: () -> Unit) {
         Modifier
             .clip(RoundedCornerShape(SeuRadius.tag))
             .background(c.primarySoft)
+            // 引导锚点：本控件即「切换课表」的高亮目标。
+            .guideTarget(GuideTargetKey.TIMETABLE_SWITCH_BOARD)
             .clickable { onClick() }
             .padding(horizontal = 9.dp, vertical = 3.dp)
     ) {
@@ -316,6 +322,9 @@ private fun WeekSwitcher(
             .clip(RoundedCornerShape(SeuRadius.tag))
             .background(c.surface)
             .border(1.dp, c.border, RoundedCornerShape(SeuRadius.tag))
+            // 引导锚点：整条「‹ 第 X 周 ›」都是目标——
+            // 引导文案同时讲箭头与左右滑动，把整条圈起来比只圈标签更贴切。
+            .guideTarget(GuideTargetKey.TIMETABLE_WEEK)
             .padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

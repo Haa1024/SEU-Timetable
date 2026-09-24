@@ -38,6 +38,8 @@ import com.seu.timetable.domain.Timetable
 import com.seu.timetable.ui.components.BellIcon
 import com.seu.timetable.ui.components.CourseRow
 import com.seu.timetable.ui.components.Tag
+import com.seu.timetable.ui.guide.GuideTargetKey
+import com.seu.timetable.ui.guide.guideTarget
 import com.seu.timetable.ui.theme.LocalSeuColors
 import com.seu.timetable.ui.theme.LocalSeuType
 import com.seu.timetable.ui.theme.SeuRadius
@@ -108,6 +110,7 @@ fun TodayPage(
                 Modifier
                     .clip(CircleShape)
                     .background(c.primarySoft)
+                    .guideTarget(GuideTargetKey.TODAY_REMINDER)
                     .clickable { onBellClick() }
                     .padding(11.dp)
             ) {

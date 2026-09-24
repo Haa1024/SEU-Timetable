@@ -44,6 +44,26 @@ class SettingsStore(private val context: Context) {
     val reminderMinutes: Flow<Int> =
         context.settingsDataStore.data.map { it[KEY_REMINDER_MINUTES] ?: 15 }
 
+    /**
+     * 实操引导是否已经看过。
+     *
+     * 只在**真正完整走过一遍**（或主动跳过）后置真。默认 false——
+     * 首次安装的用户值即为"没看过"，回主页时自动开始引导。
+     *
+     * 为什么不复用"是否有课表"来判断：那只能表达"用户建过课表"，
+     * 无法表达"用户已经知道各功能在哪"。老用户升级到带引导的版本、
+     * 或清过一次数据，都会退化成"又被引导一遍"。
+     */
+    val guideSeen: Flow<Boolean> =
+        context.settingsDataStore.data.map { it[KEY_GUIDE_SEEN] ?: false }
+
+    suspend fun markGuideSeen() =
+        context.settingsDataStore.edit { it[KEY_GUIDE_SEEN] = true }
+
+    /** 供「重看新手指引」使用：把标记清掉，回主页时即会重新开始。 */
+    suspend fun resetGuideSeen() =
+        context.settingsDataStore.edit { it.remove(KEY_GUIDE_SEEN) }
+
     suspend fun dismissUnplaced(termCode: String) =
         context.settingsDataStore.edit { it[KEY_DISMISSED_UNPLACED] = termCode }
 
@@ -75,5 +95,6 @@ class SettingsStore(private val context: Context) {
         val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
         val KEY_REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
         val KEY_REMINDER_MINUTES = intPreferencesKey("reminder_minutes")
+        val KEY_GUIDE_SEEN = booleanPreferencesKey("guide_seen")
     }
 }

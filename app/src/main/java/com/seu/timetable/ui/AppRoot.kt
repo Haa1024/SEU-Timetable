@@ -31,6 +31,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,10 +42,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -78,6 +82,10 @@ import com.seu.timetable.ui.components.SeuCard
 import com.seu.timetable.ui.components.SeuTabBar
 import com.seu.timetable.ui.components.SeuToggle
 import com.seu.timetable.ui.components.SettingRow
+import com.seu.timetable.ui.guide.FirstRunGuideSteps
+import com.seu.timetable.ui.guide.GuideOverlay
+import com.seu.timetable.ui.guide.GuideTargetRegistry
+import com.seu.timetable.ui.guide.LocalGuideTargets
 import com.seu.timetable.ui.pages.AccountPage
 import com.seu.timetable.ui.pages.BoardSettingsPage
 import com.seu.timetable.ui.pages.BoardsPage
@@ -175,6 +183,25 @@ fun AppRoot() {
     var boardIndex by remember { mutableStateOf(BoardIndex.EMPTY) }
     var courseCounts by remember { mutableStateOf<Map<String, Int>>(emptyMap()) }
 
+    // ---- 新手实操引导 ----
+    //
+    // 目标登记处：各页面控件在布局时把自身矩形写进来，引导浮层按当前步骤读出去。
+    // 在 AppRoot 建、经 CompositionLocal 下发，全 App 共用一个实例。
+    val guideTargets = remember { GuideTargetRegistry() }
+
+    /** 引导是否进行中。 */
+    var guideRunning by remember { mutableStateOf(false) }
+
+    /**
+     * 引导是否已经看过。
+     *
+     * 初值给 true 而非 false 是刻意的：`collectAsState` 的初值会在真实的
+     * DataStore 值到达**之前**先用于组合。若给 false，那么每次冷启动的第一帧
+     * 都会满足"没看过"，从而在数据到位前就闪一下引导。给 true 则宁可漏判
+     * （真正的新用户晚几毫秒才看到引导），也不会让老用户每次启动被闪。
+     */
+    val guideSeen by settings.guideSeen.collectAsState(initial = true)
+
     /** 校园会话是否有效。null 表示尚未探测。不决定 App 能否使用。 */
     var sessionOk by remember { mutableStateOf<Boolean?>(null) }
 
@@ -226,6 +253,23 @@ fun AppRoot() {
             if (loaded == null) LibraryState.Empty else LibraryState.Ready(loaded)
         } catch (e: Exception) {
             readLibraryFailure(e)
+        }
+    }
+
+    // ---- 首次进入主界面时自动播放实操引导 ----
+    //
+    // 触发条件三合一：已有可显示的课表、引导没看过、当前不在引导中。
+    //
+    // 为什么要等「有课表」：引导的第 2–4 步要高亮课表页的按钮，
+    // 而课表页在课表库为空时压根不存在（那时首屏是 [EmptyLibraryView]），
+    // 提前播放会导致那几步无洞可挖。这也顺带符合用户的预期——
+    // 刚装完 App 就直接糊一层蒙层，不如等他建好第一份课表再说。
+    //
+    // LaunchedEffect 的 key 用 state 与 guideSeen：两者都是异步就绪的
+    // （课表要读盘、标记要读 DataStore），谁后到都该能触发，故不能只挂在其中一个上。
+    LaunchedEffect(state, guideSeen) {
+        if (!guideSeen && state is LibraryState.Ready && !guideRunning) {
+            guideRunning = true
         }
     }
 
@@ -339,6 +383,9 @@ fun AppRoot() {
 
     SeuTheme(themeMode = themeMode) {
         val c = LocalSeuColors.current
+        // 下发目标登记处：各页面的 guideTarget 会把它读出来并写入自身矩形。
+        // 必须包在最外层，否则各页面读到的是兜底的临时实例，浮层永远拿不到坐标。
+        CompositionLocalProvider(LocalGuideTargets provides guideTargets) {
         Box(Modifier.fillMaxSize().background(c.bg)) {
             // ---- 盖层页的返回键 ----
             //
@@ -463,6 +510,7 @@ fun AppRoot() {
                             }
                         },
                         onLogin = { launchLogin() },
+                        onOpenGuide = { guideRunning = true },
                         onSignOut = {
                             // 退出登录只清校园登录态，本地课表一张都不删。
                             //   这正是"课表是本地资产"的体现：退了也能离线看课表。
@@ -486,6 +534,12 @@ fun AppRoot() {
                             }
                         },
                         onContentChanged = { scope.launch { reload() } },
+                        guideRunning = guideRunning,
+                        onGuideFinished = {
+                            guideRunning = false
+                            scope.launch { settings.markGuideSeen() }
+                        },
+                        guideTargets = guideTargets,
                     )
                 }
             }
@@ -527,6 +581,7 @@ fun AppRoot() {
                     onDismiss = { syncResult = null },
                 )
             }
+        }
         }
     }
 }
@@ -617,6 +672,14 @@ private fun MainScaffold(
     /** 从「我的」页发起校园登录：登录与会话状态都归「校园账号」一处管 */
     onLogin: () -> Unit,
     onSignOut: () -> Unit,
+    /** 从「我的 → 新手指引」重新播放实操引导 */
+    onOpenGuide: () -> Unit,
+    /** 实操引导是否进行中 */
+    guideRunning: Boolean,
+    /** 引导结束（走过最后一步或跳过） */
+    onGuideFinished: () -> Unit,
+    /** 引导目标登记处，供本层渲染浮层时读取各控件矩形 */
+    guideTargets: GuideTargetRegistry,
     onUpdateCourse: (Course) -> Unit,
     onDeleteCourse: (String) -> Unit,
     onContentChanged: () -> Unit,
@@ -688,6 +751,10 @@ private fun MainScaffold(
 
     BackHandler(enabled = screen !is Screen.Home) { screen = Screen.Home }
 
+    // 外层 Box 只为引导浮层而存在：浮层要以整个窗口为坐标系铺满，
+    // 直接放进下面这个 Column 会被纵向排布挤成"只占剩余空间"。
+    // 不引导时它就是个透传容器，零开销。
+    Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             when (val s = screen) {
@@ -738,6 +805,7 @@ private fun MainScaffold(
                         accountSubtitle = accountSubtitle,
                         onOpenAccount = { screen = Screen.Account },
                         onOpenHelp = { screen = Screen.Help },
+                        onOpenGuide = onOpenGuide,
                         // 「校园账号」一行同时承担"看状态"和"去登录"，不再另设「重新登录」。
                         sessionOk = sessionOk,
                         boardCount = boardCount,
@@ -833,12 +901,31 @@ private fun MainScaffold(
             }
         }
     }
+
+    // ---- 新手实操引导浮层 ----
+    //
+    // 与上面的 Column 是**兄弟**：浮层要盖住包括底部导航栏在内的一切，
+    // 故必须跳出 Column 的纵向排布。
+    //
+    // 放在 MainScaffold 层（而非 AppRoot）：周次、tab 这类被引导的东西
+    // 都归本层所有，浮层要能驱动 tab 切换才能到达各步的目标页面。
+    if (guideRunning) {
+        GuideOverlay(
+            steps = FirstRunGuideSteps,
+            registry = guideTargets,
+            onFinish = onGuideFinished,
+            // 每步若指定了 tab，就先把界面切过去——目标控件只有在被摆放时
+            // 才会通过 onGloballyPositioned 上报矩形，切过去之后洞才挖得出来。
+            onStepShown = { step -> step.tab?.let { switchTab(it) } },
+        )
+    }
+    }   // Box（引导浮层的外层容器）
 }
 
 /**
  * 三个主页面（今日 / 课表 / 我的）的宿主。
  *
- * 设计要点是「**常驻**」：页面进入过一次就留在组合里，[current] 之外的页面只是不再摆放。
+ * 设计要点是「**常驻**」：页面进入过一次就留在组合里，[current] 之外的页面默认不再摆放。
  * 之前的写法是 `AnimatedContent`，它会在过渡动画结束后销毁上一页，于是每次切换都要从零组合
  * 一整页。实测「课表」页（7×13 网格 + 十几个按可用宽度自适应的文字）从零组合会稳定产生
  * 一帧 150–200ms 的 UI 线程卡顿；快速连点时，上一页还没退完、下一页又开始组合，
@@ -848,11 +935,23 @@ private fun MainScaffold(
  * 与「我的」，之后才去「课表」）。没有 key 时 `remember` 的槽位会按位置错配到别的页面上——
  * 滚动位置与动画状态会串页，而且这种错配在编译期毫无痕迹。
  *
- * **刻意的取舍：切页不加任何进场动画。** 早先这里给进场页做过 `alpha` 淡入 + 四分之一屏的
- * 横向位移（180ms tween），结果是"页面整体弹一下"，与底部导航胶囊自身的弹性动画叠在一起，
- * 观感是两套节奏在打架——胶囊在弹、页面也在弹。现在页面是硬切，位移的示意完全交给导航胶囊：
- * 它横向滑动并回弹，本身就说明了"从哪一页移动到哪一页"，这比让整页内容跟着飘一遍更干净。
- * 因此 [incomingDir] 这个「进场方向」也已一并删掉：没有页面位移，方向就没人用了。
+ * ## 切页的横向滑动
+ *
+ * 切换时旧页向左退场、新页从右侧进场，方向由两个 tab 的 [HomeTab.ordinal] 大小决定，
+ * 与底部导航胶囊的滑动方向一致——胶囊往右滑、页面也往右走，两套位移讲同一个故事。
+ *
+ * 为什么这不会重蹈"两套节奏打架"的覆辙：冲突的根源是**轴向不同**——
+ * 早先给页面做的是竖向位移（`alpha` 淡入 + 纵向弹一下），而胶囊是横向滑，
+ * 一个往上弹一个往旁滑，看着就是在各演各的。现在两者同为横向、同时长、同缓动，
+ * 是同一次运动的两个部分，不存在"打架"。
+ *
+ * ## 与「常驻」的共存
+ *
+ * 滑动期间需要**同时摆放两页**（旧页还在画），而常驻的省流手段恰恰是"不摆放"。
+ * 两者靠 `composeKept` 的可见性参数调和：动画进行中把"本次出发点"那一页也标成要摆放，
+ * 动画一结束就撤回，之后它继续以不摆放的方式留在组合里。
+ * 于是省流与过渡都能拿到——这也是没有直接换回 `AnimatedContent` 的原因
+ * （它会销毁页面，省流就没了）。
  */
 @Composable
 private fun HomeTabHost(
@@ -861,19 +960,67 @@ private fun HomeTabHost(
     modifier: Modifier = Modifier,
     content: @Composable (HomeTab) -> Unit,
 ) {
+    // 本次过渡的「出发点」。由 effect 在过渡**结束后**更新为 current。
+    var fromTab by remember { mutableStateOf(current) }
+    val transitioning = fromTab != current
+
+    // 方向：由 current 与 fromTab 在**组合阶段**直接推导，不放进 effect。
+    // （放 effect 里会导致 current 变化的首帧读到上一次的方向，位移符号就错了。）
+    val direction = if (current.ordinal > fromTab.ordinal) 1 else -1
+
+    // 过渡进度：0 = 停在出发点，1 = 停在新页。
+    //
+    // 用 `remember(current)` 而非 `remember { Animatable(1f) }` + `snapTo(0f)`，
+    // 是为了解决"闪帧"：`snapTo` 只能写在 effect 里，而 effect 天然晚于状态变更一帧，
+    // 于是 current 变化的首帧里进度还是旧的 1f，新页会以**终点位置**先画出来，
+    // 下一帧才被拉回起点重新滑——用户看到的就是"先闪几帧再滑"。
+    //
+    // `remember(current)` 在**组合阶段**就换了新实例，首帧拿到的进度即为初始值，
+    // 新页从第一帧起就摆在自己的起点上，不存在"先到终点"的中间态。
+    // 初值恒为 0f：首次组合时不必过渡，但下面的 effect 不会启动，
+    // 进度会停在 0f —— 这与"停在出发点"一致（此时出发点即当前页，位移恒为 0），
+    // 故静止画面不受影响。
+    val progress = remember(current) { Animatable(0f) }
+
+    LaunchedEffect(current) {
+        if (fromTab != current) {
+            progress.animateTo(1f, tween(TabSlideMs))
+            // 动画结束后撤离旧页：它仍留在组合里，只是不再摆放。
+            fromTab = current
+        }
+    }
+
     Box(modifier) {
         visited.forEach { entry ->
             key(entry) {
-                val active = entry == current
+                val isCurrent = entry == current
+                // 只有"本次过渡的出发点"才需要留在画面上；更早离场的页一律收起。
+                val isLeaving = entry == fromTab && transitioning
+
+                val offsetFraction = when {
+                    // 旧页：从 0 退到 -direction
+                    isLeaving -> -direction * progress.value
+                    // 新页：从 +direction 进到 0
+                    isCurrent && transitioning -> direction * (1f - progress.value)
+                    else -> 0f
+                }
+
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .composeKept(active)
+                        // 位移用 graphicsLayer 而非 offset：走的是绘制阶段的变换，
+                        // 不触发重新测量/布局。翻周那类动画已证明这条路够快。
+                        .graphicsLayer { translationX = offsetFraction * size.width }
+                        .composeKept(isCurrent || isLeaving)
                 ) { content(entry) }
             }
         }
     }
 }
+
+/** 切页滑动时长。与底部导航胶囊的 spring 大致同量级，长了显得拖沓。 */
+private const val TabSlideMs = 240
+
 
 /**
  * 只在 [visible] 为真时测量并摆放子内容；为假时**保持组合**，但不测量、不摆放。

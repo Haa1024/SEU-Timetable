@@ -41,6 +41,8 @@ import com.seu.timetable.ui.components.SectionLabel
 import com.seu.timetable.ui.components.Segmented
 import com.seu.timetable.ui.components.SeuCard
 import com.seu.timetable.ui.components.SettingRow
+import com.seu.timetable.ui.guide.GuideTargetKey
+import com.seu.timetable.ui.guide.guideTarget
 import com.seu.timetable.ui.theme.LocalSeuColors
 import com.seu.timetable.ui.theme.LocalSeuType
 import com.seu.timetable.ui.theme.ThemeMode
@@ -101,6 +103,8 @@ fun ProfilePage(
     onSignOut: () -> Unit,
     /** 打开静态使用说明页 */
     onOpenHelp: () -> Unit,
+    /** 重新播放实操引导（在真实界面上逐步高亮各功能） */
+    onOpenGuide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = LocalSeuColors.current
@@ -163,7 +167,10 @@ fun ProfilePage(
         Spacer(Modifier.height(20.dp))
         SectionLabel("课表数据")
         Spacer(Modifier.height(8.dp))
-        SeuCard(Modifier.fillMaxWidth(), padding = 0.dp) {
+        // 引导锚点：这一张卡片是「我的页功能入口」的高亮目标。
+        // 选它而非整页：引导要说的是"同步、账号、课表管理都在这儿"，
+        // 而这三项恰好同处一卡，圈住它指向明确。
+        SeuCard(Modifier.fillMaxWidth().guideTarget(GuideTargetKey.PROFILE_ENTRIES), padding = 0.dp) {
             Column(Modifier.padding(horizontal = 16.dp)) {
                 SettingRow(
                     title = "我的课表",
@@ -254,6 +261,12 @@ fun ProfilePage(
         Spacer(Modifier.height(8.dp))
         SeuCard(Modifier.fillMaxWidth(), padding = 0.dp) {
             Column(Modifier.padding(horizontal = 16.dp)) {
+                SettingRow(
+                    title = "新手指引",
+                    subtitle = "在真实界面上逐步高亮各功能的位置，可随时重看",
+                    onClick = onOpenGuide,
+                )
+                RowDivider()
                 SettingRow(
                     title = "使用帮助",
                     subtitle = "课表来源、登录与同步、界面操作与常见问题",
