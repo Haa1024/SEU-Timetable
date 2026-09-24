@@ -118,22 +118,41 @@ App 已处理这个流程：下载完成后先检测权限，未授权则弹说�
 
 | 域名 | 用途 | 实测结果 |
 |---|---|---|
-| `api.github.com` | Release API | 通 |
-| `github.com` | 仓库页 / Release 页 | 时通时不通 |
-| `raw.githubusercontent.com` | 清单首选地址 | 时通时不通 |
-| `cdn.jsdelivr.net` | 清单兜底地址 | 通（走代理时） |
-| `release-assets.githubusercontent.com` | **APK 实际下载域名** | 域名本身可连，但完整下载失败 |
+| `api.github.com` | Release API | 通（0.4s） |
+| `github.com` | 仓库页 / Release 页 / RELEASE 直链入口 | 通（约 1s） |
+| `raw.githubusercontent.com` | 清单首选地址 | 通（直连 4.6s；走代理曾超时） |
+| `cdn.jsdelivr.net` | 清单兜底地址 | 通，响应最快 |
+| `release-assets.githubusercontent.com` | **APK 实际下载域名** | **能连上、能开始下，但吞吐极低** |
+
+### 关键实测：清单能拿到，但 APK 下不动
+
+v1.0.0 发布后的真机通路实测（2026-09-24）：
+
+| 测试项 | 结果 |
+|---|---|
+| `update.json`（jsDelivr） | ✅ HTTP 200，内容完整 |
+| `update.json`（raw 直连） | ✅ HTTP 200，4.6s |
+| APK 直链（走代理） | ⚠️ HTTP 200，**60s 只收到 360KB / 1.63MB** |
+| APK 直链（直连） | ⚠️ HTTP 200，**90s 只收到 128KB，1450 B/s** |
 
 两个要点：
 
-1. **GitHub 已不再使用 `objects.githubusercontent.com`**，现在 Release 资产会 302 到
-   `release-assets.githubusercontent.com`，底层是 Azure Blob
-   （`releaseassetproduction.blob.core.windows.net`）。若配置 DNS 白名单要放这两个。
-2. 实测中「`github.com` 打得开」**不代表「APK 能下下来」**——发布页与资产下载是两套域名。
-   排查时务必直接测 `apkUrl` 的完整下载，不要只看首页能否打开。
+1. **HTTP 200 不等于能下完。** 上面两次都是 200、都开始传数据了，但吞吐低到不可用。
+   直连那次停在 131072 字节（正好 128KB，一个 TCP 窗口边界）——典型的连接被限速/掐断。
+   排查时**必须看总耗时与实际字节数**，只看状态码会被骗过去。
+2. **GitHub 已不再使用 `objects.githubusercontent.com`**，现在 Release 资产 302 到
+   `release-assets.githubusercontent.com`（底层 Azure Blob
+   `releaseassetproduction.blob.core.windows.net`，URL 带 SAS 签名，有效期约 1 小时）。
+   若配置 DNS 白名单要放这两个。
+
+顺带说明：`update.json` 走 jsDelivr 是**明显更优**的路径——它响应最快，且托管在 CDN 上，
+不受 `release-assets` 这个瓶颈影响。清单能拿到意味着「能正确判断有没有新版本」，
+但**能不能把包装下来取决于用户自己的网络**，这是客户端无法解决的。
 
 App 侧对此的应对：清单配了**两个源依次降级**，任何一个存活即可用；
 全部失败则明确提示「暂时连不上更新服务器」，**不会**误报「已是最新」。
+APK 下载交给系统 `DownloadManager`——它带断点续传和重试，
+比 App 自己拉更能扛住这种低吞吐链路。
 
 ---
 
