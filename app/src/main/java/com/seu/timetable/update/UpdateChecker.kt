@@ -19,20 +19,23 @@ import java.util.concurrent.TimeUnit
  */
 object UpdateSources {
 
+    /** 仓库归属，改托管时只动这两行。 */
+    private const val OWNER = "Haa1024"
+    private const val REPO = "SEU-Timetable"
+
     /**
      * 清单地址，按优先级排列，依次降级。
      *
-     * 目前填的是占位仓库名，等你建好仓库后替换成真实地址即可——
-     * 这是**唯一**需要在换托管时改动的地方，检查逻辑本身与域名无关。
+     * 这里是**唯一**需要在换托管时改动的地方，检查逻辑本身与域名无关。
      *
      * 约定：仓库里放一个 `update.json`（内容见 [UpdateInfo]），
      * APK 作为 Release 资产上传，`apkUrl` 填其直链。
      */
     val MANIFEST_URLS: List<String> = listOf(
         // 首选：raw 直链，跳数最少、响应最快
-        "https://raw.githubusercontent.com/OWNER/REPO/main/update.json",
+        "https://raw.githubusercontent.com/$OWNER/$REPO/main/update.json",
         // 兜底：jsDelivr 的 GitHub 镜像，国内可达性通常优于 raw
-        "https://cdn.jsdelivr.net/gh/OWNER/REPO@main/update.json",
+        "https://cdn.jsdelivr.net/gh/$OWNER/$REPO@main/update.json",
     )
 }
 

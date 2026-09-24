@@ -26,12 +26,16 @@ App 拉 update.json  →  比 versionCode  →  下载 apkUrl 并拉起系统安
 ```json
 {
   "versionCode": 2,
-  "versionName": "0.2.0",
-  "apkUrl": "https://github.com/<你>/<仓库>/releases/download/v0.2.0/SEU课表-release.apk",
-  "notes": "新增应用内更新\n修复小组件教室显示",
+  "versionName": "1.0.1",
+  "apkUrl": "https://github.com/Haa1024/SEU-Timetable/releases/download/v1.0.1/SEU-Timetable-v1.0.1.apk",
+  "notes": "修复小组件教室显示",
   "mandatory": false
 }
 ```
+
+> **APK 资产名请用纯 ASCII**（如 `SEU-Timetable-v1.0.1.apk`），不要用中文名。
+> 中文名在 URL 里要经过百分号编码，一旦哪一环漏了编码，下载就会 404；
+> 而 GitHub 页面上能看到文件、直链却下不动，这种故障最难查。
 
 字段说明：
 
@@ -49,8 +53,8 @@ App 拉 update.json  →  比 versionCode  →  下载 apkUrl 并拉起系统安
 
 ```kotlin
 val MANIFEST_URLS: List<String> = listOf(
-    "https://raw.githubusercontent.com/<你>/<仓库>/main/update.json",
-    "https://cdn.jsdelivr.net/gh/<你>/<仓库>@main/update.json",
+    "https://raw.githubusercontent.com/Haa1024/SEU-Timetable/main/update.json",
+    "https://cdn.jsdelivr.net/gh/Haa1024/SEU-Timetable@main/update.json",
 )
 ```
 
@@ -72,7 +76,7 @@ val MANIFEST_URLS: List<String> = listOf(
 ./gradlew assembleRelease
 # 产物：app/build/outputs/apk/release/app-release.apk
 
-# 3. 上传到 GitHub Release（tag 建议与 versionName 对应，如 v0.2.0）
+# 3. 上传到 GitHub Release（tag 与 versionName 对应，如 v1.0.1；资产名用纯 ASCII）
 
 # 4. 更新仓库里的 update.json（versionCode / versionName / apkUrl / notes）
 ```
