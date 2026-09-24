@@ -59,9 +59,12 @@ import com.seu.timetable.data.AUTH_BASE
 import com.seu.timetable.data.CasAuthClient
 import com.seu.timetable.data.CasLoginResult
 import com.seu.timetable.data.CredentialStore
+import com.seu.timetable.data.Credentials
 import com.seu.timetable.data.EHALL_APP
 import com.seu.timetable.data.EHALL_BASE
 import com.seu.timetable.data.EhallClient
+import com.seu.timetable.data.GatewayAuthClient
+import com.seu.timetable.data.GatewayLoginResult
 import com.seu.timetable.data.SessionProbe
 import com.seu.timetable.ui.components.AccountField
 import com.seu.timetable.ui.components.BackIcon
@@ -80,15 +83,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * 登录页 = 账号密码表单 + 一层隐身的门户页。
+ * 登录页 = 账号密码表单 + 一层隐身的门户页（后者仅作兜底）。
  *
  * 界面：默认只给表单（学号 + 密码 + 是否保存），用户不必看见学校的网页。
- * 后台：拿到 TGT（见 [CasAuthClient]）后由 [watchSession] 驱动隐身 WebView 走完
- * 「门户 → 点击我的课表 → 静默换票」，建立课表会话（GS_SESSIONID + _WEU）。
+ * 后台：拿到 TGT（见 [CasAuthClient]）后先试**纯 HTTP** 走完网关与课表会话
+ * （见 [establishSession] 与 [GatewayAuthClient]）；只有这条路不通时才退回
+ * 「隐身 WebView 走门户 → 点击我的课表」（见 [watchSession]）。
  *
- * 为什么不能干脆删掉 WebView：ehall 的授权 cookie `_WEU` 只认「从门户点入」的事务。
- * 直接打开课表地址同样能拿到 GS_SESSIONID，但 `_WEU` 不下发、接口恒 403（详见 [watchSession]）。
- * 门户那一步只能交给网页 JS 去执行；之所以把它藏起来，是因为这个过程对用户毫无信息量。
+ * ## 为什么曾经不能删 WebView，现在可以退居兜底
+ *
+ * 学校 2024-11 把 SSLVPN 换成了 Sangfor aTrust 零信任网关，`ehall.seu.edu.cn`
+ * 整个域都在网关之后：未持网关会话时，任何路径（根、深链、`/login?service=`、接口）
+ * 都被 302 到 `vpn.seu.edu.cn/.../verify`，再落到一个**必须跑 JS 的门户 SPA**。
+ * 旧版因此认定「门户那一步只能交给网页 JS」。
+ *
+ * 但实测发现：网关自己就带 CAS SSO，入口由 `/passport/v1/public/authConfig` 下发
+ * （`firstAuth: ["/passport/v1/public/casLogin?sfDomain=CAS-auth"]`），
+ * 且这条链全是普通 302，不依赖页面 JS。于是「过网关」这件事可以纯 HTTP 完成——
+ * WebView 从「必经之路」降级为「验证码与协议变动时的兜底」。
  *
  * 网页只在两种情况下露出：学校要求验证码（只能人工过），或用户主动点「改用网页登录」。
  *
@@ -158,8 +170,29 @@ class LoginActivity : ComponentActivity() {
     /** 认证接口客户端。自动模式之外用不到，故延迟初始化。 */
     private val casAuth by lazy { CasAuthClient() }
 
+    /**
+     * 零信任网关的纯 HTTP 登录。**先试它、失败再退 WebView**（见 [establishSession]）。
+     * 学校自 2024-11 把 SSLVPN 换成了 Sangfor aTrust，ehall 整个域都在网关后面；
+     * 但网关自带 CAS SSO，那条链全是普通 302，不必跑页面 JS。
+     */
+    private val gatewayAuth by lazy { GatewayAuthClient() }
+
     /** 凭据存储。手动输入密码的路径不会用到。 */
     private val credentials by lazy { CredentialStore(this) }
+
+    /**
+     * 本次会话可用来「自助过 CAS」的凭据。
+     *
+     * 三条来源，优先级从高到低：
+     *  ① 用户刚在表单里填的（[submitLogin] 当场赋值）——最可信，一定没过期；
+     *  ② 本地已存的——[autoLogin] 与 [fallbackToDirect] 用；
+     *  ③ 都没有则为 null，此时纯 HTTP 链一遇到「无 TGT」就会如实退回 WebView，
+     *    而不是拿着空密码去敲 CAS 把账号往风控上撞。
+     *
+     * 只在内存里存，不落盘：落盘已由 [CredentialStore] 按用户意愿负责。
+     */
+    @Volatile
+    private var sessionCredentials: Credentials? = null
 
     /** 是否「能自动则自动」。由调用方决定（设置页关闭自动登录则传 false）。 */
     private var autoMode = false
@@ -209,6 +242,33 @@ class LoginActivity : ComponentActivity() {
     /** 直链兜底是否已使用 */
     @Volatile
     private var fallbackUsed = false
+
+    /**
+     * 走到课表页之后，是否已经用掉「清 ehall cookie + 重走网关链」这次自动复活。
+     *
+     * 为何需要它：`reachedWdkb` 只说明**页面导航到了**课表地址，不代表会话拿到了——
+     * 网关会话过期、或 ehall 侧残留一个失效的 `GS_SESSIONID` 时，页面会被导向 403 错误页，
+     * 而 URL 里仍含 `wdkb`。此时探测必然恒失败，而 [watchSession] 的其余分支
+     * （`!autoLaunched && !reachedWdkb`）已不成立，会一路 `return@repeat` 空转到轮询耗尽，
+     * 用户看到的就是「已打开课表页，正在确认会话…」永不出来。这一标记用来打断该空转。
+     * 只复活一次，防死循环。
+     */
+    @Volatile
+    private var sessionRevived = false
+
+    /**
+     * 已经历的轮询轮数。用于「卡在课表页太久」的超时判定，
+     * 须由所有提前返回的分支共同累加，否则空转的轮次不会被计入（见 [wdkbStuckRounds]）。
+     */
+    @Volatile
+    private var watchRounds = 0
+
+    /**
+     * 连续「已到课表页但探测不通过」的轮数。达 [STUCK_AT_WDKB_ROUNDS] 即判定卡死，
+     * 依次尝试自动复活、最后交还用户（见 [onWdkbStuck]）。
+     */
+    @Volatile
+    private var wdkbStuckRounds = 0
 
     /** 自动点击入口的尝试次数 */
     private var clickTries = 0
@@ -279,8 +339,8 @@ class LoginActivity : ComponentActivity() {
 
         // 已有票则无需接触密码——这也是「存了密码却几乎用不上」的常态。
         if (hasAuthTicket()) {
-            DebugLog.i("auto：auth 域已有 TGT → 不碰密码，直接开门户")
-            openPortal()
+            DebugLog.i("auto：auth 域已有 TGT → 不碰密码，直接建会话")
+            establishSession()
             return
         }
 
@@ -292,16 +352,19 @@ class LoginActivity : ComponentActivity() {
         }
 
         DebugLog.i("auto：auth 域没有 TGT，但有保存的账号（${creds.username}）→ 开始换票")
+        // 记下来：建立会话时若纯 HTTP 链需要再过一次 CAS，就用这一份，
+        // 不必让 [GatewayAuthClient] 回头再问一次 store（那要多一次 suspend 解密）。
+        sessionCredentials = creds
         when (val r = tryCredentialLogin(creds.username, creds.password)) {
             is CasLoginResult.Success -> {
                 DebugLog.i(
-                    "auto：换票成功（TGT 落库=${r.tgtInStore}，有效期 ${r.maxAge} 秒）→ 开门户"
+                    "auto：换票成功（TGT 落库=${r.tgtInStore}，有效期 ${r.maxAge} 秒）→ 建会话"
                 )
-                // tgtInStore 为 false 时仍开门户：CAS 可能仍认本次会话，否则 [watchSession] 自愈分支会兜底。
+                // tgtInStore 为 false 时仍继续：CAS 可能仍认本次会话，否则 [watchSession] 自愈分支会兜底。
                 if (!r.tgtInStore) {
                     DebugLog.w("auto：TGT 没落进 CookieManager，门户可能仍要求登录")
                 }
-                openPortal()
+                establishSession()
             }
             CasLoginResult.BadCredentials ->
                 degradeToManual("保存的学号或密码不对，请重新输入。")
@@ -318,6 +381,63 @@ class LoginActivity : ComponentActivity() {
     private suspend fun tryCredentialLogin(username: String, password: String): CasLoginResult {
         credentialLoginTried = true
         return casAuth.login(username, password)
+    }
+
+    /**
+     * 认证完成后的统一收口：**先试纯 HTTP 走网关，不行再退 WebView**。
+     *
+     * 为什么值得这么改：`ehall.seu.edu.cn` 已被零信任网关接管，而网关自带 CAS SSO，
+     * 那条链全是普通 302（详见 [GatewayAuthClient]）。也就是说「过网关」这件事
+     * 本来就不需要页面 JS——旧版非用 WebView 不可，是因为当时只想到「打开门户页点课表」，
+     * 没想到网关自己就提供了一个可直连的 CAS 入口。
+     *
+     * 于是自动续期这条最频繁的路径可以完全不碰 WebView：
+     * 少一次网页加载、少一轮 DOM 点击、少 60 轮轮询，也就少掉了「有时 WebView 登录出问题」
+     * 这一类不稳定的来源。WebView 只作为**兜底**保留：验证码、网关协议变动、
+     * 或纯 HTTP 链走到一半失败时，仍能回退到「打开门户页让人自己点」。
+     *
+     * 走纯 HTTP 成功后仍要探一次会话才算数——判据与 WebView 路径完全一致（[probeOnce]），
+     * 不靠猜测 cookie 名。
+     */
+    private suspend fun establishSession(casAuthenticated: Boolean = false) {
+        // ① 纯 HTTP 走网关
+        setStatus(LoginPhase.CHECKING, GATEWAY_HINT)
+        // 凭据**一律带上**，让 [GatewayAuthClient] 在「TGT 以为还在、其实已过期」时
+        // 还能自助补一次登录；`casAuthenticated` 才是「别重复登录」的开关——
+        // 两者职责不同，别用「不给凭据」来表达「已认证」（那样 TGT 一过期就必然白退回 WebView）。
+        when (val g = runCatching { gatewayAuth.login(sessionCredentials, casAuthenticated) }
+            .getOrElse { GatewayLoginResult.Failed(it.message ?: "异常", emptyList()) }) {
+            is GatewayLoginResult.Success -> {
+                DebugLog.i("纯 HTTP 网关链走通 → 直接探会话（不启 WebView）")
+                g.steps.forEach { DebugLog.i("GW $it") }
+                // 网关 cookie 先落盘：进程若在此刻被回收，重进时网关会话仍在（否则每次都重走一遍）
+                runCatching { CookieManager.getInstance().flush() }
+                // 网关通不代表 ehall 会话就绪（可能还需 ehall 自己那一跳），故探一次再说
+                if (probeOnce()) return
+                DebugLog.w("网关已通但 ehall 会话未就绪 → 退回 WebView 走门户链")
+            }
+            is GatewayLoginResult.NoCasSession -> {
+                DebugLog.w("纯 HTTP：CAS 侧无有效 TGT → 退回 WebView")
+                g.steps.forEach { DebugLog.i("GW $it") }
+            }
+            is GatewayLoginResult.NeedCaptcha -> {
+                DebugLog.w("纯 HTTP：服务端要求验证码 → 只能退回 WebView")
+                g.steps.forEach { DebugLog.i("GW $it") }
+            }
+            is GatewayLoginResult.Failed -> {
+                DebugLog.w("纯 HTTP 网关链未走通（${g.reason}）→ 退回 WebView")
+                g.steps.forEach { DebugLog.i("GW $it") }
+                // 兜底复验：cookie 名字判不出会话，但票可能已经被服务端受理并建好了会话
+                // （实测：送 ST 给 ehall 会直接 200，却不产生任何 cookie，按 cookie 判必然误判失败）。
+                // 真判据只有一个——拿真实业务接口探一次。探通了就不必启 WebView。
+                if (probeOnce()) return
+                DebugLog.w("复验未通过 → 退回 WebView 走门户链")
+            }
+        }
+        // ② 兜底：老路，由网页「打开门户 → 点我的课表」完成
+        DebugLog.i("退回 WebView 门户链")
+        setStatus(LoginPhase.CHECKING, AUTO_START_HINT)
+        openPortal()
     }
 
     /**
@@ -338,6 +458,9 @@ class LoginActivity : ComponentActivity() {
             // 残留的 GS_SESSIONID 会让后续请求恒 403 且不跳统一认证（见 [clearEhallCookies]）。
             clearEhallCookies()
 
+            // 用户刚敲进去的这一份就是本会话最可信的凭据，后续纯 HTTP 链需要再过 CAS 时直接用它。
+            sessionCredentials = Credentials(username.trim(), password)
+
             val result = runCatching { casAuth.login(username, password) }
                 .getOrElse { CasLoginResult.Failed(it.message ?: "异常") }
 
@@ -351,8 +474,8 @@ class LoginActivity : ComponentActivity() {
                             credentials.setAutoLogin(true)
                         }.onFailure { DebugLog.w("凭据保存失败：${it.message}") }
                     }
-                    DebugLog.i("表单登录：换票成功（TGT 落库=${result.tgtInStore}）→ 开门户")
-                    // 这次是全新的门户会话，把上一轮的进度全部复位。
+                    DebugLog.i("表单登录：换票成功（TGT 落库=${result.tgtInStore}）→ 建会话")
+                    // 这次是全新的会话，把上一轮的进度全部复位。
                     reachedWdkb = false
                     autoLaunched = false
                     fallbackUsed = false
@@ -360,11 +483,16 @@ class LoginActivity : ComponentActivity() {
                     authHostRounds = 0
                     ticketRetried = false
                     credentialLoginTried = true
+                    // 卡死判定同样要从零起算，否则上一轮攒下的轮数会立刻触发复活/交还
+                    sessionRevived = false
+                    watchRounds = 0
+                    wdkbStuckRounds = 0
                     // 置 true 以启用「卡在认证页」的自愈分支（见 [watchSession] ①.5）：
                     // 手上可能留着别处登出后失效的废票，那种情况下需要清票重来一次。
                     autoMode = true
-                    setStatus(LoginPhase.CHECKING, AUTO_START_HINT)
-                    openPortal()
+                    // CAS 已认证，直接走 ehall SSO 入口建会话——
+                    // 不必再绕一圈网关入口自助换票（那条路多一次往返且实测容易空转）。
+                    establishSession(casAuthenticated = true)
                 }
 
                 CasLoginResult.BadCredentials -> {
@@ -593,93 +721,216 @@ class LoginActivity : ComponentActivity() {
     }
 
     /**
-     * 后台主循环：自动完成「登录之后」的全部步骤，并在可取数据时收工返回。
+     * 后台主循环（**兜底路径**）：当纯 HTTP 走网关失败时，才由它驱动隐身 WebView
+     * 自动完成「登录之后」的全部步骤，并在可取数据时收工返回。
      * 三阶段：① 等待认证完成（auth 域出现 TGT 且页面已回到门户）；② 替用户点击门户内「我的课表」
      * （两步：先点应用卡片，门户弹二次确认框，再点「打开」）；③ 探测接口，取得合法 JSON 即返回。
-     * 第 ② 步须为「点击」而非「直接打开课表地址」：直链同样能取 GS_SESSIONID，但 _WEU（授权 cookie）
-     * 不下发、接口恒 403；门户点击路径则 _WEU 随会话下发、接口 200，二者在服务端非同一事务，故由程序
-     * 点击真实元素、由门户决定 URL 与跳转。兜底：点不到则退回直链；用户手动点开课表（[reachedWdkb]）亦启动探测。
+     *
+     * 第 ② 步为何是「点击」而非「自拼课表地址」：门户点开应用时，由门户自己决定 URL、gid_、
+     * 请求头与跳转，程序不必也不该猜。直链在**网关会话已建立**时通常也能取到会话，
+     * 但网关未建立时会先被 302 到 SPA（见 [GatewayAuthClient]）——这正是纯 HTTP 那条路要解决的。
+     *
+     * 兜底：点不到则退回直链（先过网关，见 [fallbackToDirect]）；用户手动点开课表（[reachedWdkb]）
+     * 亦启动探测；到课表页却始终探不通则由 [onWdkbStuck] 复活或交还用户。
+     *
+     * ⚠️ **每轮都必须计轮数、且异常不得逃逸**。原先的实现有两个静默死区，都会让界面
+     * 永久停在「已打开课表页，正在确认会话…」：
+     *   1) `reachedWdkb == true` 后若一路走 `return@repeat`，轮次照数但什么也不做，
+     *      60 轮跑完只改一句文案，用户看起来就是卡住；
+     *   2) 任一行的异常（如个别 ROM 上 `CookieManager` 抛错）会击穿 `repeat` 直接结束本函数，
+     *      而 [startWatch] 只会启动一次，于是**再没有任何东西会去探测**。
+     * 故现在：轮数在所有分支统一累加（[watchRounds]），主体包在 try/catch 里，
+     * 并新增 [onWdkbStuck] 这条「到页却不通过」的判定，让空转有终点。
      */
     private suspend fun watchSession() {
-        repeat(MAX_WATCH_ROUNDS) { round ->
-            delay(WATCH_INTERVAL_MS)
-            if (finishedOk) return
+        try {
+            repeat(MAX_WATCH_ROUNDS) { round ->
+                delay(WATCH_INTERVAL_MS)
+                if (finishedOk) return
 
-            authHostRounds = if (currentHost == AUTH_HOST) authHostRounds + 1 else 0
+                watchRounds++
 
-            // ① 认证完成 → 进入自动接管
-            if (!autoLaunched && hasAuthTicket() && onPortal()) {
-                autoLaunched = true
-                DebugLog.i("认证已完成（auth 域已有 TGT）→ 开始自动接管")
-                setStatus(LoginPhase.CHECKING, AUTO_HINT)
-                return@repeat  // 给门户时间渲染应用列表
-            }
+                authHostRounds = if (currentHost == AUTH_HOST) authHostRounds + 1 else 0
 
-            // ①.5 卡在认证页 = 手上的票为废票（cookie 仍在、服务端已不认）。TGT 过期或别处登出后 cookie 不消失，
-            // 导致 hasAuthTicket() 仍为真，但门户将其打发至认证页、认证页见「有票」又不显表单，用户卡在登不进的页面。
-            if (autoMode && !autoLaunched && !ticketRetried && authHostRounds >= STUCK_AT_AUTH_ROUNDS) {
-                ticketRetried = true
-                if (credentialLoginTried) {
-                    // 密码这条本轮已经试过还是卡住 → 不再纠缠，交回给人（避免把账号试进锁定）
-                    degradeToManual("自动登录没成功，请手动登录一次。")
-                    return
+                // ① 认证完成 → 进入自动接管
+                if (!autoLaunched && hasAuthTicket() && onPortal()) {
+                    autoLaunched = true
+                    DebugLog.i("认证已完成（auth 域已有 TGT）→ 开始自动接管")
+                    setStatus(LoginPhase.CHECKING, AUTO_HINT)
+                    return@repeat  // 给门户时间渲染应用列表
                 }
-                DebugLog.w("auto：连续 $authHostRounds 轮停在认证页 → 判定旧票失效，清票后重新换一次")
-                clearAuthTicket()
-                val creds = credentials.load()
-                if (creds == null) {
-                    degradeToManual("登录态已失效，请手动登录一次。")
-                    return
-                }
-                when (tryCredentialLogin(creds.username, creds.password)) {
-                    is CasLoginResult.Success -> openPortal()
-                    CasLoginResult.BadCredentials ->
-                        degradeToManual("保存的学号或密码不对，请手动登录一次（可在「我的」页重新保存）。")
-                    CasLoginResult.CaptchaRequired ->
-                        degradeToManual("学校这次要求输入验证码，请手动登录一次。")
-                    else ->
+
+                // ①.5 卡在认证页 = 手上的票为废票（cookie 仍在、服务端已不认）。TGT 过期或别处登出后 cookie 不消失，
+                // 导致 hasAuthTicket() 仍为真，但门户将其打发至认证页、认证页见「有票」又不显表单，用户卡在登不进的页面。
+                if (autoMode && !autoLaunched && !ticketRetried && authHostRounds >= STUCK_AT_AUTH_ROUNDS) {
+                    ticketRetried = true
+                    if (credentialLoginTried) {
+                        // 密码这条本轮已经试过还是卡住 → 不再纠缠，交回给人（避免把账号试进锁定）
                         degradeToManual("自动登录没成功，请手动登录一次。")
-                }
-                return@repeat
-            }
-
-            // ② 替用户完成「点开课表」这条链：须每轮都点，不能「点中一次即收手」——门户点开应用先弹
-            // 二次确认框，完整动作是「点课表 → 点打开」两步。故改为一直点到真正走到课表页（[reachedWdkb]），
-            // 由 [CLICK_ENTRY_JS] 判断当前该点哪个（有确认框点「打开」，否则点「我的课表」）。
-            if (autoLaunched && !reachedWdkb) {
-                if (clickTries < MAX_CLICK_TRIES) {
-                    clickTries++
-                    clickTimetableEntry()
+                        return
+                    }
+                    DebugLog.w("auto：连续 $authHostRounds 轮停在认证页 → 判定旧票失效，清票后重新换一次")
+                    clearAuthTicket()
+                    val creds = credentials.load()
+                    if (creds == null) {
+                        degradeToManual("登录态已失效，请手动登录一次。")
+                        return
+                    }
+                    sessionCredentials = creds
+                    when (tryCredentialLogin(creds.username, creds.password)) {
+                        is CasLoginResult.Success -> openPortal()
+                        CasLoginResult.BadCredentials ->
+                            degradeToManual("保存的学号或密码不对，请手动登录一次（可在「我的」页重新保存）。")
+                        CasLoginResult.CaptchaRequired ->
+                            degradeToManual("学校这次要求输入验证码，请手动登录一次。")
+                        else ->
+                            degradeToManual("自动登录没成功，请手动登录一次。")
+                    }
                     return@repeat
                 }
-                if (!fallbackUsed) {
-                    fallbackUsed = true
-                    DebugLog.w("自动点击没能走到课表页（试了 $MAX_CLICK_TRIES 次）→ 退回直链")
-                    webView.post { webView.loadUrl(EHALL_APP_URL) }
-                    return@repeat
+
+                // ② 替用户完成「点开课表」这条链：须每轮都点，不能「点中一次即收手」——门户点开应用先弹
+                // 二次确认框，完整动作是「点课表 → 点打开」两步。故改为一直点到真正走到课表页（[reachedWdkb]），
+                // 由 [CLICK_ENTRY_JS] 判断当前该点哪个（有确认框点「打开」，否则点「我的课表」）。
+                if (autoLaunched && !reachedWdkb) {
+                    if (clickTries < MAX_CLICK_TRIES) {
+                        clickTries++
+                        clickTimetableEntry()
+                        return@repeat
+                    }
+                    // 点击次数已耗尽。直链兜底只能发起一次，用完仍没到课表页就从这里退出循环，
+                    // **不能**落到下面的 `!autoLaunched && !reachedWdkb` 分支——那样每轮都会
+                    // 静默 `return@repeat` 空转到 60 轮上限，用户界面一直停在「正在自动打开课表…」。
+                    // 归纳到同样一处「到不了课表页」的出口，与 [onWdkbStuck] 共用话术。
+                    if (!fallbackUsed) {
+                        fallbackUsed = true
+                        DebugLog.w("自动点击没能走到课表页（试了 $MAX_CLICK_TRIES 次）→ 退回直链")
+                        fallbackToDirect()
+                        return@repeat
+                    }
+                    DebugLog.w("点击已耗尽且直链兜底也未到课表页 → 交还用户")
+                    degradeToManual(
+                        "没能自动打开「我的课表」，请手动点开一次；" +
+                            "或点「改用网页登录」自行操作。",
+                    )
+                    return
                 }
+
+                // 未自动接管且用户也未手动走到课表页时，探测必然失败，无需再发请求
+                if (!autoLaunched && !reachedWdkb) return@repeat
+
+                // ③ 探测。这里是原先的第二个死区：`reachedWdkb` 为真但会话拿不到时，
+                // 上面所有分支都不再命中，只会一遍遍走到这里探、次次失败，最后静默耗尽。
+                // 故探不通则累计 [wdkbStuckRounds]，由 [onWdkbStuck] 决定复活还是交还用户。
+                DebugLog.i("后台轮询第 ${round + 1} 次（autoLaunched=$autoLaunched）")
+                if (probeOnce()) return
+
+                wdkbStuckRounds++
+                if (onWdkbStuck()) return
             }
-
-            // 未自动接管且用户也未手动走到课表页时，探测必然失败，无需再发请求
-            if (!autoLaunched && !reachedWdkb) return@repeat
-
-            DebugLog.i("后台轮询第 ${round + 1} 次（autoLaunched=$autoLaunched）")
-            if (probeOnce()) return
+            if (!finishedOk) {
+                setStatus(
+                    LoginPhase.WAITING,
+                    if (stage.value == LoginStage.WEB) {
+                        // WEB 通路：网页露出，右上角确实有「已完成」按钮，可以指它
+                        "还没拿到课表会话。若尚未登录请先登录；已登录的话，" +
+                            "点右上角「已完成」再试一次，或点「重新开始」。"
+                    } else {
+                        // 表单通路：网页是隐藏的，右上角没有「已完成」按钮，
+                        // 此时提它只会让用户去找一个不存在的东西。这里只给可执行的动作。
+                        "还没拿到课表会话，请再点一次「登录」；" +
+                            "若反复不行，可点「改用网页登录」手动操作。"
+                    },
+                )
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // 单轮里任何未被就地消化的异常都不该让轮询整体消失——那会让界面永久停在
+            // 中途的文案上，且 [startWatch] 不会重启它。这里兜住并如实告知用户。
+            DebugLog.e("后台轮询异常终止（第 $watchRounds 轮）：${e.message}")
+            if (!finishedOk) {
+                degradeToManual("登录过程出了点问题（${e.message ?: e::class.simpleName}），请重试一次。")
+            }
         }
-        if (!finishedOk) {
-            setStatus(
-                LoginPhase.WAITING,
-                if (stage.value == LoginStage.WEB) {
-                    // WEB 通路：网页露出，右上角确实有「已完成」按钮，可以指它
-                    "还没拿到课表会话。若尚未登录请先登录；已登录的话，" +
-                        "点右上角「已完成」再试一次，或点「重新开始」。"
-                } else {
-                    // 表单通路：网页是隐藏的，右上角没有「已完成」按钮，
-                    // 此时提它只会让用户去找一个不存在的东西。这里只给可执行的动作。
-                    "还没拿到课表会话，请再点一次「登录」；" +
-                        "若反复不行，可点「改用网页登录」手动操作。"
-                },
-            )
+    }
+
+    /**
+     * 「已到课表页、但会话始终探测不通过」的处理。返回 true 表示本次流程结束（或已重开一轮）。
+     *
+     * 这是原先**最贵的一个盲区**：`reachedWdkb` 只记录「页面导航到了含 `wdkb` 的地址」，
+     * 而网关会话过期、或 ehall 侧残留失效 `GS_SESSIONID` 时，页面同样会停在那样一个 URL 上
+     * ——只是内容是 403 错误页。此时探测恒失败、其余分支又都不命中，界面就永久停在
+     * 「已打开课表页，正在确认会话…」。
+     *
+     * 两级动作：
+     *   ① 首次判定卡住 → 清 ehall 侧 cookie 并重走网关链（[reviveSession]），只做一次；
+     *   ② 复活后仍卡住 → 交还用户，并给出与通路匹配的出口话术（不再空转）。
+     */
+    private fun onWdkbStuck(): Boolean {
+        if (wdkbStuckRounds < STUCK_AT_WDKB_ROUNDS) return false
+
+        if (!sessionRevived) {
+            sessionRevived = true
+            DebugLog.w("已到课表页但连续 $wdkbStuckRounds 轮探测不通过 → 清 ehall 残留会话并重走网关链")
+            reviveSession()
+            return false
+        }
+
+        DebugLog.w("复活后仍拿不到会话（${describe(lastProbe)}）→ 交还用户")
+        setStatus(
+            LoginPhase.WAITING,
+            if (stage.value == LoginStage.WEB) {
+                "课表页已打开但会话没建成（${describe(lastProbe)}）。" +
+                    "可点右上角「已完成」重试，或点「重新开始」重走一遍。"
+            } else {
+                "课表页已打开但会话没建成（${describe(lastProbe)}）。" +
+                    "请点「改用网页登录」手动打开一次「我的课表」，或重试登录。"
+            },
+        )
+        return true
+    }
+
+    /**
+     * 清 ehall 侧残留会话，然后重走「过网关 → 直链课表页」。
+     *
+     * 为什么清 cookie 有用：ehall 的会话网关「有会话 cookie 就不再看票据」——`GS_SESSIONID`
+     * 哪怕已失效也会让它既不认（整页 403）也不跳统一认证。清掉才能拿到干净会话
+     * （见 [clearEhallCookies] 的对照实验）。
+     *
+     * 清完**必须重新过网关**再直链：ehall 侧会话是在网关放行之后才建立的，
+     * 只清不重过就还是在门外。[fallbackToDirect] 已含「先过网关」，故此处不重复调。
+     */
+    private fun reviveSession() {
+        DebugLog.i("复活：清 ehall 残留会话 → 重走网关链并直链课表页")
+        clearEhallCookies()
+        reachedWdkb = false
+        clickTries = 0
+        fallbackUsed = false
+        // 从零起算：复活后本函数已消费掉「自动复活」额度（sessionRevived 保持 true），
+        // 卡住判定需重新累计，才能在复活也无效时走到「交还用户」那一级。
+        wdkbStuckRounds = 0
+        fallbackToDirect()
+    }
+
+    /**
+     * 退回「直接打开课表地址」这条兜底。
+     *
+     * **先过一遍网关**再加载直链：ehall 已被零信任网关接管（见 [GatewayAuthClient]），
+     * 网关会话不在时直链只会被 302 到 SPA、页面永远到不了课表。原实现直接
+     * `loadUrl(EHALL_APP_URL)`，在网关会话过期后必然白跳一次——这正是「卡在已打开课表页」
+     * 的一个来源，故这里补齐前置条件。网关不通也照跳：让门户链去完成它那一步。
+     */
+    private fun fallbackToDirect() {
+        lifecycleScope.launch {
+            val g = runCatching { gatewayAuth.login(sessionCredentials) }
+                .getOrElse { GatewayLoginResult.Failed(it.message ?: "异常", emptyList()) }
+            if (g is GatewayLoginResult.Success) {
+                runCatching { CookieManager.getInstance().flush() }
+            } else {
+                DebugLog.w("直链兜底前没能过网关（${(g as? GatewayLoginResult.Failed)?.reason ?: "无 CAS 会话"}）")
+            }
+            webView.post { webView.loadUrl(EHALL_APP_URL) }
         }
     }
 
@@ -814,6 +1065,12 @@ class LoginActivity : ComponentActivity() {
         authHostRounds = 0
         ticketRetried = false
         credentialLoginTried = false
+        // 卡死判定的累积值一并清零，让重开后重新获得完整的「复活 + 交还」额度
+        sessionRevived = false
+        watchRounds = 0
+        wdkbStuckRounds = 0
+        fallbackUsed = false
+        clickTries = 0
         lastProbe = SessionProbe.NotLoggedIn("尚未探测")
         probeInfo.value = "尚未探测"
         formError.value = ""
@@ -1062,8 +1319,20 @@ class LoginActivity : ComponentActivity() {
          */
         private const val STUCK_AT_AUTH_ROUNDS = 4
 
+        /**
+         * 连续几轮「已到课表页但探测不通过」才判定卡死。
+         *
+         * 须留足余量：走到课表页后，服务端还要拿 ticket 换会话，且课表页自身有几十个初始化请求，
+         * 慢设备上首次探测失败是正常的。取 5 轮（约 10s）能盖住这个时间窗，
+         * 又不会让用户在真正卡住时干等太久（原实现要耗满 60 轮 = 2 分钟才给出一句无用的文案）。
+         */
+        private const val STUCK_AT_WDKB_ROUNDS = 5
+
         /** 自动模式开场时的文案：让用户知道"不用你动手，稍等" */
         private const val AUTO_START_HINT = "正在自动登录校园账号，请稍候…"
+
+        /** 正在走纯 HTTP 网关链——与「开网页」那条分开说，便于日志分辨走了哪条路 */
+        private const val GATEWAY_HINT = "正在建立校园网络会话…"
 
         /** 传 true 走自动模式（有凭据就自己登，失败静默退化成普通登录页）。 */
         const val EXTRA_AUTO = "com.seu.timetable.extra.AUTO"
