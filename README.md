@@ -118,12 +118,6 @@ app/src/main/java/com/seu/timetable/
 覆盖解析逻辑（用匿名的真实接口响应做夹具）、版本比对、更新源降级链、
 以及小组件布局契约（布局 XML 与渲染代码的常量必须一致）。
 
-## 应用内更新
-
-发版流程与约定见 [`docs/UPDATE.md`](docs/UPDATE.md)。
-
-要点：`update.json` 里的 `versionCode` 必须**严格大于**已安装版本的 `versionCode`，
-且每次发版只能加不能减——安装器会拒绝 `versionCode` 不高于本机的包。
 
 ## 说明
 
