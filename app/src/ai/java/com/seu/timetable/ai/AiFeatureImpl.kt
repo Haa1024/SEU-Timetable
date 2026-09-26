@@ -1,10 +1,8 @@
 package com.seu.timetable.ai
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.seu.timetable.BuildConfig
 import com.seu.timetable.data.LoadedBoard
@@ -56,7 +54,10 @@ object AiFeatureImpl : AiFeature {
                 loaded = loaded,
                 week = week,
                 visible = visible,
-                settingsVisible = settingsVisible,
+                // 设置页已改由 [SettingsScreen] 的原生页承担（缘由见那里）。
+                // 共享层仍按老协议把 settingsVisible 传进来，因为它并不知道设置由谁画；
+                // 本实现恒置 false——壳一旦进入设置态就会铺满屏幕，把原生页整个盖住。
+                settingsVisible = false,
                 open = open,
                 onOpenChange = onOpenChange,
                 onBack = onBack,
@@ -65,15 +66,18 @@ object AiFeatureImpl : AiFeature {
         }
     }
 
+    /**
+     * `Screen.AiSettings` 对应的整页。
+     *
+     * 两种界面形态共用这一页，设置不再交给 WebView 壳去画。原因是那个做法本身有死锁：
+     * 壳由 [Overlay] 渲染，而 [Overlay] 在未启用时直接返回——于是「未启用」时点进来
+     * 既没有原生页、也没有壳，只剩一片空白。**设置页不能由一个可能被门禁拦住的层来渲染。**
+     *
+     * 总开关也在这里（[AiSettingsPage] 顶部）。默认关的功能，开关必须始终可及。
+     */
     @Composable
     override fun SettingsScreen(onBack: () -> Unit) {
-        // 刻意不判 enabled：用户正是要靠这一页把 AI 打开。
-        if (BuildConfig.AI_UI == "compose") {
-            AiSettingsPage(aiViewModel(), onBack = onBack)
-        } else {
-            // WebView 版的设置界面画在浮窗内部（由 settingsVisible 驱动），不占独立页面。
-            Box(Modifier)
-        }
+        AiSettingsPage(aiViewModel(), onBack = onBack)
     }
 }
 
