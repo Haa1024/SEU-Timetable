@@ -84,6 +84,6 @@ node preview/record-layout.mjs
 
 **普通聊天不会读取或操作课表。** 切换「课表操作」后，当前课表、作息和预览日期会作为上下文发给所配置的模型；返回内容经过校验后写入浏览器课表。两种模式都不附带校园账号。操作记录按课表分别缓存，普通聊天独立缓存。未说明周次先追问，创建后可补充老师、学分和备注；成功操作不能重新生成，最近一次操作可在没有后续修改时撤销。详见 [分阶段范围及验收](AI-TIMETABLE-STAGES.md)。
 
-test01 保留基础聊天；用户授权后的 test02 已接入上述课表操作、自动压缩和图片确认导入。原有 Android 课表页面继续使用 Compose，仅 AI 窗口复用随 APK 打包的网页模块，通过原生接口操作真实课表，不依赖电脑预览服务器。详见 [test02 构建和验收](../TEST02.md)。
+Android 侧以 ai 变体接入上述课表操作、自动压缩和图片确认导入。原有 Android 课表页面继续使用 Compose，仅 AI 窗口复用随 APK 打包的网页模块，通过原生接口操作真实课表，不依赖电脑预览服务器。
 
 模型和图片格式依据 [DeepSeek 官方视觉文档](https://api-docs.deepseek.com/guides/vision/) 与 [Chat Completion API](https://api-docs.deepseek.com/api/create-chat-completion/) 实现。2026-09-26 已用用户提供的测试 Key 从网页实际验证连接、流式文字和图片识别；测试图片是绿色方块与“SEU 42”，不包含个人信息。记录见本机 `.runtime/ai-live-result.json`；该目录不提交 Git。

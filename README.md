@@ -198,11 +198,11 @@ AI 悬浮按钮和窗口支持拖动；窗口可放大、缩小、最大化／�
 
 **数据去向：** 普通聊天发送对话、摘要和附图；课表操作额外发送当前课表、作息及日期等必要上下文，不发送校园登录账号与密码。用户所选 API 服务负责处理这些数据。聊天及附图保存在本机应用私有 WebView 存储；它们不等同于 Key 的 Keystore 加密存储。卸载或清除应用数据会删除本机记录。浏览器预览的 Key 使用浏览器会话／本地存储，不具有安卓 Keystore 的保护。
 
-### 6. 浏览器预览、安卓测试包与验证范围
+### 6. 浏览器预览、发行形态与验证范围
 
 浏览器预览用于在电脑上快速调整和验证界面，保存代码后会刷新；支持手机尺寸、浅色／深色、日期与周次预览。网页与安卓共享 AI 模块和操作校验逻辑，网页预览不是 Android 模拟器，不能替代系统 WebView、触控、键盘及图片选择器的真机测试。
 
-安卓独立测试包为 **test02 / 02.02**（包名 `com.seu.timetable.test02`），与原版和早期基础聊天版本 test01 分别安装、分别保存数据。原版 defaultConfig 的应用 ID 和版本未改。
+安卓侧有两个发行形态，由 Gradle flavor 区分：**原版 plain**（包名 `com.seu.timetable`，与原版共用应用 ID、版本与签名，老用户可无感覆盖升级）与 **AI 版 ai**（包名 `com.seu.timetable.ai`，可与原版同机安装，两者数据互不相通）。AI 代码物理上只属于 ai 变体（`app/src/ai`），原版变体在编译期就不含任何 AI 逻辑、资源与依赖。
 
 ```bash
 # 网页依赖、预览与自动测试
@@ -214,12 +214,15 @@ npm test --prefix preview
 node scripts/sync-ai-assets.mjs
 
 # 需要 JDK 17 和 Android SDK 35
-./gradlew assembleTrialTwo testTrialTwoUnitTest lintTrialTwo
+./gradlew assemblePlainDebug              # 原版
+./gradlew assembleAiDebug                 # AI 版（默认 WebView 浮窗）
+./gradlew assembleAiDebug -PaiUi=compose  # AI 版（原生 Compose 浮窗）
+./gradlew testAiDebugUnitTest             # AI 版单元测试
 ```
 
-当前记录：67 项网页测试通过；Android JVM 135 项通过、1 项可选完整图片回放跳过；test02 构建完成，lint 无 Error/Fatal。周次追问、自然语言改述、限定周次、隔周、失败后恢复，以及添加和撤销已进行真实 API 验证。**完整图片识别回归曾失败，跳过项不代表通过。** 本页新增截图说明手机上的实际交互与结果，但不是对所有功能的完整真机验收，最新滚动锁定仍需专门验证。
+当前记录：Android JVM 单元测试原版 122 项通过，AI 版 136 项通过、3 项可选真实 API 回放跳过。周次追问、自然语言改述、限定周次、隔周、失败后恢复，以及添加和撤销已进行真实 API 验证。**完整图片识别回归曾失败，跳过项不代表通过。** 本页截图说明手机上的实际交互与结果，但不是对所有功能的完整真机验收。
 
-真实 API 测试需要显式提供本机密钥文件，可能产生接口费用，默认跳过；仓库和 APK 不提供测试密钥。更多说明见 [预览使用方法](preview/README.md)、[课表操作与验收](preview/AI-TIMETABLE-STAGES.md)、[上下文管理与图片导入](preview/CONTEXT-AND-IMAGE-IMPORT.md) 和 [test02 原生实现及验证记录](TEST02.md)。
+真实 API 测试需要显式提供本机密钥文件，可能产生接口费用，默认跳过；仓库和 APK 不提供测试密钥。更多说明见 [预览使用方法](preview/README.md)、[课表操作与验收](preview/AI-TIMETABLE-STAGES.md) 和 [上下文管理与图片导入](preview/CONTEXT-AND-IMAGE-IMPORT.md)。
 
 
 ## 技术栈
