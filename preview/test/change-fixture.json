@@ -1,0 +1,14 @@
+{
+  "id": "phase2", "name": "AI 调课验收", "source": "MANUAL", "showOutOfWeek": false,
+  "term": {"firstMonday":"2026-09-21","totalWeeks":18,"lastTeachingWeek":16,"morning":5,"afternoon":5,"evening":3},
+  "courses": [
+    {"id":"english","name":"英语","teacher":"张老师","credit":3.5,"note":"带课本","colorOverride":4,"code":"EN01","classNo":"02"},
+    {"id":"sport","name":"体育","teacher":"刘老师","credit":1,"note":"运动鞋","colorOverride":2,"code":"PE01","classNo":"01"}
+  ],
+  "sessions": [
+    {"id":"english-thu","courseId":"english","day":4,"start":1,"end":2,"weeks":[1,2,3,4],"room":"礼东"},
+    {"id":"english-fri","courseId":"english","day":5,"start":3,"end":4,"weeks":[1,2,3,4],"room":"教三"},
+    {"id":"sport-tue","courseId":"sport","day":2,"start":8,"end":9,"weeks":[1,2,3,4],"room":"体育馆"}
+  ],
+  "unplaced": []
+}

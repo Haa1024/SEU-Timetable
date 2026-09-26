@@ -28,11 +28,13 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.gestures.stopScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -158,6 +160,8 @@ fun TimetablePage(
     onDismissUnplaced: () -> Unit,
     /** 是否将非本周课程绘制为半透明影子块（于课表设置中控制，即时生效）。 */
     showOutOfWeek: Boolean = false,
+    /** AI 窗口展开时，仅暂停课表纵向滚动，保留当前位置。 */
+    userScrollEnabled: Boolean = true,
     modifier: Modifier = Modifier,
 ) {
     val c = LocalSeuColors.current
@@ -238,6 +242,7 @@ fun TimetablePage(
                 onWeekChange = onWeekChange,
                 onCourseClick = onCourseClick,
                 showOutOfWeek = showOutOfWeek,
+                userScrollEnabled = userScrollEnabled,
             )
         }
 
@@ -415,6 +420,7 @@ private fun WeekGrid(
     onWeekChange: (Int) -> Unit,
     onCourseClick: (String) -> Unit,
     showOutOfWeek: Boolean,
+    userScrollEnabled: Boolean,
 ) {
     val c = LocalSeuColors.current
     val t = LocalSeuType.current
@@ -505,6 +511,11 @@ private fun WeekGrid(
             },
             label = "week",
         ) { shownWeek ->
+            val gridScroll = rememberScrollState()
+            LaunchedEffect(userScrollEnabled) {
+                // 开窗时同时停止惯性滚动；收起窗口不重置已浏览的位置。
+                if (!userScrollEnabled) gridScroll.stopScroll()
+            }
             Column(Modifier.fillMaxSize()) {
                 // ---- 固定表头：周一…周日，每列下方带该周对应日期 ----
                 //
@@ -561,7 +572,7 @@ private fun WeekGrid(
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
+                            .verticalScroll(gridScroll, enabled = userScrollEnabled)
                     ) {
                         Box(
                             Modifier
@@ -605,13 +616,13 @@ private fun WeekGrid(
                             // 故该数据完全来自本地配置。未配置的节次仅显示节次号，不做推断。
                             for (p in 1..periods) {
                                 val time = schedule.timeOf(p)
-                                    Box(
-                                        Modifier
-                                            .offset(y = rowTopOf(term, p))
-                                            .width(gutter - TimeGutterGap)
-                                            .height(PeriodPitch),
-                                        contentAlignment = Alignment.TopEnd,
-                                    ) {
+                                Box(
+                                    Modifier
+                                        .offset(y = rowTopOf(term, p))
+                                        .width(gutter - TimeGutterGap)
+                                        .height(PeriodPitch),
+                                    contentAlignment = Alignment.TopEnd,
+                                ) {
                                     Column(horizontalAlignment = Alignment.End) {
                                         Text("$p", style = t.gridRoom, color = c.textTertiary)
                                         if (time != null) {

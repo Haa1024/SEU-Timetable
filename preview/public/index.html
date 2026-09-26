@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>东大课表 · 开发预览</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/course-pages.css">
+  <link rel="stylesheet" href="/ai-chat.css">
+</head>
+<body>
+  <aside class="workbench">
+    <div class="brand"><img src="/favicon.svg" alt="" width="38" height="38"><div><strong>东大课表</strong><span>本地开发预览</span></div></div>
+    <div class="connection"><span class="status-dot"></span><span id="connection">正在连接预览服务</span></div>
+    <p class="bench-label">预览页面</p>
+    <nav id="page-links" class="page-links" aria-label="预览页面"></nav>
+    <div class="bench-divider"></div>
+    <label class="bench-field">设备尺寸<select id="device"><option value="384,854">截图比例 · 384 × 854</option><option value="393,852">标准手机 · 393 × 852</option><option value="360,800">小屏手机 · 360 × 800</option><option value="430,932">大屏手机 · 430 × 932</option></select></label>
+    <label class="bench-field">外观<select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+    <div class="bench-divider"></div>
+    <p class="bench-label">演示场景</p>
+    <label class="bench-field">预览日期<input id="preview-date" type="date"></label>
+    <label class="bench-field">预览时间<input id="preview-time" type="time"></label>
+    <div class="scenario-buttons"><button data-scenario="class">正在上课</button><button data-scenario="done">今日结束</button><button data-scenario="week9">第 9 周</button><button data-scenario="empty">尚未导入</button></div>
+    <button id="reset" class="reset-button">重置演示数据</button>
+    <div class="preview-note"><strong>浏览器交互预览</strong><p>课程来自仓库测试样例，修改仅保存在当前浏览器。主题、字号、圆角和作息读取安卓源码；页面布局为独立实现。</p><p>学校登录、通知与桌面小组件需在安卓端验证。</p></div>
+  </aside>
+  <main class="canvas">
+    <header class="canvas-header"><div><span class="eyebrow">SEU TIMETABLE</span><h1 id="screen-title">今日课程</h1></div><div class="live-badge"><span class="status-dot"></span>保存后自动刷新</div></header>
+    <div id="sync-warning" class="sync-warning" hidden></div>
+    <div class="device-stage"><div class="device-shell" id="device-shell"><div class="phone" id="phone">
+      <div class="status-bar"><span id="status-time">10:00</span><span class="system-icons">▂▄▆ <svg width="15" height="12" viewBox="0 0 20 16" fill="none" aria-hidden="true"><path d="M1 5Q10-2 19 5M4 8Q10 3 16 8M7 11Q10 8 13 11" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="14" r="1.4" fill="currentColor"/></svg><span class="battery"></span></span></div>
+      <div id="app" class="app" aria-label="东大课表应用预览"></div><div class="gesture-bar"></div>
+      <div id="modal-root"></div><div id="toast" role="status"></div>
+    </div></div></div>
+    <footer class="canvas-footer"><span id="source-status">正在读取项目源码…</span><span id="reload-status">本地运行 · 无需登录</span></footer>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

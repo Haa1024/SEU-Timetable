@@ -8,6 +8,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 /**
  * 课表库的**磁盘层**，仅负责单文件读写，不包含业务逻辑。
@@ -29,9 +32,8 @@ import java.io.File
  *   直接覆写时若进程被系统中断，会残留截断的半份 JSON，导致下次启动无法读取。
  *   同文件系统内的 rename 为原子操作。
  */
-class TimetableLibrary(context: Context) {
-
-    private val dir = File(context.filesDir, BOARD_DIR)
+class TimetableLibrary(private val dir: File) {
+    constructor(context: Context) : this(File(context.filesDir, BOARD_DIR))
     private val indexFile = File(dir, INDEX_FILE)
 
     // ---------------------------------------------------------------- 索引
@@ -54,7 +56,7 @@ class TimetableLibrary(context: Context) {
     }
 
     suspend fun writeIndex(index: BoardIndex) = withContext(Dispatchers.IO) {
-        writeAtomic(indexFile, JSON.encodeToString(BoardIndex.serializer(), index))
+        synchronized(IO_LOCK) { writeAtomic(indexFile, JSON.encodeToString(BoardIndex.serializer(), index)) }
     }
 
     // ---------------------------------------------------------------- 内容
@@ -72,16 +74,44 @@ class TimetableLibrary(context: Context) {
     }
 
     suspend fun writeContent(id: String, content: BoardContent) = withContext(Dispatchers.IO) {
-        writeAtomic(contentFile(id), JSON.encodeToString(BoardContent.serializer(), content))
+        synchronized(IO_LOCK) { writeAtomic(contentFile(id), JSON.encodeToString(BoardContent.serializer(), content)) }
     }
 
     suspend fun deleteContent(id: String) = withContext(Dispatchers.IO) {
-        contentFile(id).delete()
+        synchronized(IO_LOCK) { contentFile(id).delete() }
         Unit
     }
 
     suspend fun contentExists(id: String): Boolean = withContext(Dispatchers.IO) {
         contentFile(id).exists()
+    }
+
+    /** AI must never treat unreadable/corrupt storage as an empty timetable. */
+    suspend fun activeStrict(): Pair<com.seu.timetable.domain.BoardMeta, BoardContent> = withContext(Dispatchers.IO) {
+        synchronized(IO_LOCK) { activeLocked() }
+    }
+
+    private fun activeLocked(): Pair<com.seu.timetable.domain.BoardMeta, BoardContent> {
+        check(indexFile.exists()) { "请先创建或选择一张课表" }
+        val index = JSON.decodeFromString(BoardIndex.serializer(), indexFile.readText())
+        val meta = index.meta(index.effectiveActiveId) ?: error("请先创建或选择一张课表")
+        val file = contentFile(meta.id)
+        check(file.exists()) { "课表文件缺失，本次未修改" }
+        return meta to JSON.decodeFromString(BoardContent.serializer(), file.readText())
+    }
+
+    suspend fun compareAndSetActiveContent(
+        expectedMeta: com.seu.timetable.domain.BoardMeta,
+        expectedContent: BoardContent,
+        next: BoardContent,
+    ) = withContext(Dispatchers.IO) {
+        synchronized(IO_LOCK) {
+            val (meta, content) = activeLocked()
+            check(meta == expectedMeta && content == expectedContent) { "课表、作息或当前选择已改变，本次未执行，请重新发送" }
+            // One atomic rename commits courses and the undo receipt together.
+            // No later index write can turn an already committed operation into a reported failure.
+            writeAtomic(contentFile(meta.id), JSON.encodeToString(BoardContent.serializer(), next))
+        }
     }
 
     // ---------------------------------------------------------------- 工具
@@ -95,22 +125,24 @@ class TimetableLibrary(context: Context) {
     fun newId(): String =
         "b${System.currentTimeMillis()}${(100..999).random()}"
 
-    private fun contentFile(id: String) = File(dir, "content_$id.json")
+    private fun contentFile(id: String): File {
+        require(id.isNotBlank() && id.none { it == '/' || it == '\\' || it == '\u0000' }) { "无效课表标识" }
+        return File(dir, "content_$id.json")
+    }
 
     private fun writeAtomic(target: File, text: String) {
         if (!dir.exists() && !dir.mkdirs()) {
             error("建不了课表目录：${dir.absolutePath}")
         }
         val tmp = File(dir, "${target.name}.tmp")
-        tmp.writeText(text)
-        if (!tmp.renameTo(target)) {
-            // rename 失败时（少数 ROM 会出现）退化为普通覆写，以避免数据丢失
-            runCatching { target.writeText(text) }
-            tmp.delete()
-        }
+        try {
+            FileOutputStream(tmp).use { stream -> stream.write(text.toByteArray(Charsets.UTF_8)); stream.fd.sync() }
+            Files.move(tmp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        } finally { tmp.delete() }
     }
 
     private companion object {
+        val IO_LOCK = Any()
         const val BOARD_DIR = "boards"
         const val INDEX_FILE = "index.json"
 

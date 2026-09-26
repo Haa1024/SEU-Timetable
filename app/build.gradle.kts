@@ -8,6 +8,14 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+tasks.withType<Test>().configureEach {
+    // Opt-in API checks must execute, rather than reuse a previous skipped/cached result.
+    if (!System.getenv("SEU_AI_TEST_KEY_FILE").isNullOrBlank()) {
+        outputs.upToDateWhen { false }
+        outputs.cacheIf { false }
+    }
+}
+
 // 签名口令放 local.properties（已在 .gitignore 里），不硬编码进构建脚本
 val keystoreProps = Properties().apply {
     val f = rootProject.file("local.properties")
@@ -38,6 +46,20 @@ android {
     }
 
     buildTypes {
+        create("trialTwo") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".test02"
+            versionNameSuffix = "-test02"
+            resValue("string", "app_name", "test02")
+            matchingFallbacks += listOf("debug")
+        }
+        create("trial") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".test01"
+            versionNameSuffix = "-test01"
+            resValue("string", "app_name", "test01")
+            matchingFallbacks += listOf("debug")
+        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
@@ -78,6 +100,16 @@ android {
     }
 }
 
+// Keep the original/trial versions intact; allow installing this fix over test02.
+androidComponents {
+    onVariants(selector().withBuildType("trialTwo")) { variant ->
+        variant.outputs.forEach {
+            it.versionCode.set(5)
+            it.versionName.set("02.02")
+        }
+    }
+}
+
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
     implementation(composeBom)
@@ -102,9 +134,13 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("io.noties.markwon:core:4.6.2")
+    implementation("io.noties.markwon:ext-tables:4.6.2")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // 解析逻辑用真实 HAR 数据做单元测试（夹具在 src/test/resources）
     testImplementation("junit:junit:4.13.2")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
 }

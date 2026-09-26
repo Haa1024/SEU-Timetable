@@ -55,6 +55,24 @@ App 内也自带检查更新（「我的 → 检查更新」），装的版本�
 - 浅色 / 深色 / 跟随系统
 - 应用内检查更新（走 GitHub Release）
 
+## AI 助手（实验功能）
+
+课表页新增可收起的 AI 窗口，提供普通聊天和自然语言课表操作两种模式。在「我的 → AI 模型设置」配置自己的 API 地址、模型和 Key 后使用；接口需兼容 Chat Completions，图片识别还需要模型支持视觉输入。
+
+- 自然语言添加、删除、调课、替换及补充课程信息；未说明教学周时先追问，成功操作可撤销。
+- 普通聊天与每张课表的操作历史分别保存，长对话自动摘要压缩。
+- 课表图片先生成待核对清单，经确认后追加、覆盖涉及周或覆盖整表。**图片识别仍可能误判星期列，导入前必须核对。**
+- 安卓沿用 Compose 课表，AI 界面使用 APK 内置 WebView 资源，网络请求由原生 OkHttp 发送，不依赖电脑服务。发送消息时，对话、所附图片及课表操作所需的课程数据会提交给用户配置的 API 服务。
+- AI 窗口展开时暂停外层课表纵向滚动，收起后恢复；底部导航可继续切换。
+
+可独立安装的测试版本为 `test02 / 02.02`（包名 `com.seu.timetable.test02`），不会覆盖原版。构建方式：
+
+```bash
+./gradlew assembleTrialTwo testTrialTwoUnitTest lintTrialTwo
+```
+
+AI 网页源代码在 `preview/`。修改后执行 `npm ci --prefix preview` 和 `node scripts/sync-ai-assets.mjs` 更新 APK 资源；运行网页测试使用 `npm test --prefix preview`。真实 API 测试需显式提供本机密钥文件，默认跳过，不随源码或 APK 分发密钥。浏览器预览见 [preview/README.md](preview/README.md)，原生实现、验收范围和已知问题见 [TEST02.md](TEST02.md)。
+
 ## 技术栈
 
 | | |

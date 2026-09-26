@@ -123,6 +123,8 @@ data class BoardContent(
     val courses: List<Course> = emptyList(),
     val sessions: List<CourseSession> = emptyList(),
     val unplaced: List<UnplacedCourse> = emptyList(),
+    /** AI receipt and idempotency IDs are committed in the same file as courses. */
+    val aiState: kotlinx.serialization.json.JsonObject? = null,
 ) {
 
     val isEmpty: Boolean get() = courses.isEmpty() && sessions.isEmpty()

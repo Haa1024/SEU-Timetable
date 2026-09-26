@@ -42,6 +42,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.setValue
@@ -56,6 +57,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.seu.timetable.ai.AiViewModel
+import com.seu.timetable.ai.AiChatOverlay
+import com.seu.timetable.ai.AiWebOverlay
+import com.seu.timetable.ai.AiSettingsPage
 import com.seu.timetable.data.CasAuthClient
 import com.seu.timetable.data.CasLoginResult
 import com.seu.timetable.data.CredentialStore
@@ -126,6 +132,7 @@ private sealed interface Screen {
 
     /** 静态使用说明，从「我的」页进入 */
     data object Help : Screen
+    data object AiSettings : Screen
 }
 
 /**
@@ -162,6 +169,7 @@ private sealed interface LibraryState {
 
 @Composable
 fun AppRoot() {
+    val ai: AiViewModel = viewModel()
     val context = LocalContext.current
     val settings = remember { SettingsStore(context) }
     val credentials = remember { CredentialStore(context) }
@@ -469,6 +477,7 @@ fun AppRoot() {
                     )
 
                     is LibraryState.Ready -> MainScaffold(
+                        ai = ai,
                         loaded = s.board,
                         settings = settings,
                         credentials = credentials,
@@ -650,6 +659,7 @@ private fun EmptyLibraryView(
 
 @Composable
 private fun MainScaffold(
+    ai: AiViewModel,
     loaded: LoadedBoard,
     settings: SettingsStore,
     credentials: CredentialStore,
@@ -689,6 +699,7 @@ private fun MainScaffold(
     val timetable = loaded.timetable
 
     var tab by remember { mutableStateOf(HomeTab.TODAY) }
+    var aiChatOpen by rememberSaveable { mutableStateOf(false) }
 
     // 进入过的主页面。一旦进入过就留在组合里（见 HomeTab 循环处的说明）。
     // 三个元素的线性查找，不值得为此换成 Set。
@@ -797,9 +808,12 @@ private fun MainScaffold(
                             scope.launch { settings.dismissUnplaced(meta.term.termCode) }
                         },
                         showOutOfWeek = meta.showOutOfWeek,
+                        userScrollEnabled = !(aiChatOpen && tab == HomeTab.TIMETABLE && !guideRunning),
                     )
 
                     HomeTab.PROFILE -> ProfilePage(
+                        aiSummary = ai.state.collectAsState().value.let { "${it.config.model} · ${if (it.configured) "已配置" else "未填写 API Key"}" },
+                        onOpenAiSettings = { screen = Screen.AiSettings },
                         themeMode = themeMode,
                         onThemeModeChange = onThemeModeChange,
                         accountSubtitle = accountSubtitle,
@@ -889,6 +903,9 @@ private fun MainScaffold(
                 is Screen.Help -> HelpPage(
                     onBack = { screen = Screen.Home },
                 )
+                is Screen.AiSettings -> if (com.seu.timetable.BuildConfig.BUILD_TYPE == "trial") {
+                    AiSettingsPage(ai, onBack = { screen = Screen.Home })
+                } else Box(Modifier.fillMaxSize())
             }
         }
 
@@ -901,6 +918,15 @@ private fun MainScaffold(
             }
         }
     }
+
+    if (com.seu.timetable.BuildConfig.BUILD_TYPE == "trial") {
+        AiChatOverlay(ai, visible = screen is Screen.Home && tab == HomeTab.TIMETABLE && !guideRunning,
+            onSettings = { screen = Screen.AiSettings })
+    } else AiWebOverlay(ai, loaded, week,
+        visible = screen is Screen.Home && tab == HomeTab.TIMETABLE && !guideRunning,
+        settingsVisible = screen is Screen.AiSettings,
+        open = aiChatOpen, onOpenChange = { aiChatOpen = it },
+        onBack = { screen = Screen.Home }, onChanged = onContentChanged)
 
     // ---- 新手实操引导浮层 ----
     //

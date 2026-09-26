@@ -72,6 +72,8 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ProfilePage(
+    aiSummary: String,
+    onOpenAiSettings: () -> Unit,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     accountSubtitle: String,
@@ -164,6 +166,14 @@ fun ProfilePage(
             }
         }
 
+        Spacer(Modifier.height(20.dp))
+        SectionLabel("AI 助手")
+        Spacer(Modifier.height(8.dp))
+        SeuCard(Modifier.fillMaxWidth(), padding = 0.dp) {
+            Column(Modifier.padding(horizontal = 16.dp)) {
+                SettingRow(title = "AI 模型设置", subtitle = aiSummary, onClick = onOpenAiSettings)
+            }
+        }
         Spacer(Modifier.height(20.dp))
         SectionLabel("课表数据")
         Spacer(Modifier.height(8.dp))

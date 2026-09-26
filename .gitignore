@@ -56,3 +56,7 @@ keystore.properties
 # ---- 助手工作目录 ----
 # 会话记忆与工具中间产物，属本机开发资料，不进公开仓库。
 /.workbuddy/
+
+# Browser preview runtime logs and screenshots
+/preview/.runtime/
+/preview/node_modules/

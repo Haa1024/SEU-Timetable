@@ -1,0 +1,21 @@
+{
+  "app/src/main/java/com/seu/timetable/ui/AppRoot.kt": "24a431fd0bf4503a508e30eb39c3a07c470376c7541a82dae7ede0af8414d465",
+  "app/src/main/java/com/seu/timetable/ui/LoginActivity.kt": "4db7688f872edb92e85052c6d276eb2e608275367baa0575e3abc1e8a935da3f",
+  "app/src/main/java/com/seu/timetable/ui/components/Common.kt": "c4e20089e417f3bf8421cb324219e3f45b3566bbe45427da0d39ec9a507760e2",
+  "app/src/main/java/com/seu/timetable/ui/components/Forms.kt": "484ab2141458af6a3f71af0669c29d9fc1393afb507f03b46dbbc935380dddf3",
+  "app/src/main/java/com/seu/timetable/ui/components/Inputs.kt": "85b54ddb71dcde5316d45bfdd7107ea87d078d29dfbe5436844a7b771a9c8315",
+  "app/src/main/java/com/seu/timetable/ui/components/TabBar.kt": "c19e90a22f180a522720eec1ea0c589e41d80289df7f4ed939ef453d0648bd03",
+  "app/src/main/java/com/seu/timetable/ui/guide/GuideOverlay.kt": "e87333d8e6a7b72b2dfa1051d4a2e5476cf31f61fd91fd64ff9cbc7fddbe5e4f",
+  "app/src/main/java/com/seu/timetable/ui/guide/GuideScript.kt": "f22a953550e1d983f39df2a37937fe830e717230614ca1a247f5cdcaf1c07e1b",
+  "app/src/main/java/com/seu/timetable/ui/guide/GuideTargets.kt": "2749354dddcea4af6e4a9258fc011c240fc7ad0ec9e50d913282c5156b9c2f81",
+  "app/src/main/java/com/seu/timetable/ui/pages/AccountPage.kt": "a7272b6ba71ab7a29315520ba74edd724b122ede75b21fae5259c079d6692630",
+  "app/src/main/java/com/seu/timetable/ui/pages/BoardSettingsPage.kt": "af86343e2028338c02e17e8ed8cf902b6e1a3efc0c6375afffe124a2e4c868a7",
+  "app/src/main/java/com/seu/timetable/ui/pages/BoardsPage.kt": "dbf4e3c4dae2838ce8ca82f9cda74b69bfffc5d2cf744c590787d41bbdf2cd7b",
+  "app/src/main/java/com/seu/timetable/ui/pages/CourseDetailPage.kt": "b125a45bc117a30233d194d46f4a562695e888af498c5bcde6db79beb72ee504",
+  "app/src/main/java/com/seu/timetable/ui/pages/CourseEditPage.kt": "87ee104fe0bff72d477c9ccd6980acb846f9eeb0c0667dbf14a3675aa0c87fd3",
+  "app/src/main/java/com/seu/timetable/ui/pages/HelpPage.kt": "e8e036043cbf0a0a1d371613fa4caad5bdd20f33653be46b2e8609864404643e",
+  "app/src/main/java/com/seu/timetable/ui/pages/NewBoardPage.kt": "90fb942e13a4937f2b415bd3de8007384d1f39bed8f6228860eea86ad10e90d3",
+  "app/src/main/java/com/seu/timetable/ui/pages/ProfilePage.kt": "47d2e4923644efbbe1c635fd751053380ba354da34190494d0b2885db3f2c44f",
+  "app/src/main/java/com/seu/timetable/ui/pages/TimetablePage.kt": "9bf715504f1c30a7072361dff5fb3e1b0ea3956f273702f341c7cd26f0944a97",
+  "app/src/main/java/com/seu/timetable/ui/pages/TodayPage.kt": "bce76a3f389371f58636a4d1d5e265dda36dfa646f2274066e5c19c242afd97e"
+}
