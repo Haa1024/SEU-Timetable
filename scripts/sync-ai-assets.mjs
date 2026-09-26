@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { createHash } from 'node:crypto';
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const out = resolve(root, 'app/src/main/assets/ai');
+const out = resolve(root, 'app/src/ai/assets/ai');
 await mkdir(resolve(out, 'vendor'), { recursive: true });
 const files = ['ai-chat.js','ai-core.js','ai-storage.js','ai-context.js','ai-image-views.js','timetable-ai.js','timetable-import.js','timetable-request.js','timetable-protocol.js','model.js','ai-chat.css','styles.css','course-pages.css'];
 const hashes = {};

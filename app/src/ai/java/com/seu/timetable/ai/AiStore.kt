@@ -27,6 +27,15 @@ import javax.crypto.spec.GCMParameterSpec
 @Serializable
 private data class SavedAiSettings(val config: AiConfig = AiConfig(), val encryptedKey: String = "")
 
+/**
+ * AI 助手总开关。默认 **false**（关）。
+ *
+ * 存成独立字段而不是并进 [SavedAiSettings] 的 config：开关是「是否启用」，
+ * 不属于「模型如何配置」，两者混在一起会让「保存模型设置」顺手改动开关状态。
+ */
+@Serializable
+private data class SavedAiSwitch(val enabled: Boolean = false)
+
 class AiStore(private val context: Context) {
     private val folder = File(context.noBackupFilesDir, "ai-chat").apply { mkdirs() }
     private val images = File(folder, "images").apply { mkdirs() }
@@ -53,6 +62,20 @@ class AiStore(private val context: Context) {
     fun saveChat(document: ChatDocument) = write("chat.json", json.encodeToString(document))
     fun loadPosition(): ChatPosition = runCatching { json.decodeFromString<ChatPosition>(AtomicFile(File(folder, "position.json")).readFully().decodeToString()) }.getOrDefault(ChatPosition())
     fun savePosition(value: ChatPosition) = write("position.json", json.encodeToString(value))
+
+    /**
+     * 读总开关。
+     *
+     * 文件不存在、读坏、解密失败一律按「关」处理。默认值必须是关：
+     * 读不出来时宁可 AI 不工作，也不能擅自把它打开。
+     */
+    fun loadEnabled(): Boolean = runCatching {
+        val file = AtomicFile(File(folder, "enabled.json"))
+        if (!file.baseFile.exists()) false
+        else json.decodeFromString<SavedAiSwitch>(file.readFully().decodeToString()).enabled
+    }.getOrDefault(false)
+
+    fun saveEnabled(enabled: Boolean) = write("enabled.json", json.encodeToString(SavedAiSwitch(enabled)))
 
     private fun write(name: String, text: String) {
         val atomic = AtomicFile(File(folder, name))

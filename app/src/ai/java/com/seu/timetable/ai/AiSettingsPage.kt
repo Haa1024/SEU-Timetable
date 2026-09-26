@@ -51,6 +51,15 @@ fun AiSettingsPage(vm: AiViewModel, onBack: () -> Unit) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
             Text("连接你自己的模型", style = t.itemTitle, color = c.textPrimary)
             Text("用于聊天与图片问答", fontSize = 12.sp, color = c.textSecondary, modifier = Modifier.padding(top = 5.dp, bottom = 18.dp))
+            SectionLabel("总开关"); Spacer(Modifier.height(8.dp))
+            SeuCard(Modifier.fillMaxWidth()) {
+                AiCheck(
+                    "启用 AI 助手",
+                    "关闭时不显示聊天入口，也不会把课表或照片发送给任何模型。",
+                    ui.enabled,
+                ) { vm.setEnabled(it) }
+            }
+            Spacer(Modifier.height(20.dp))
             SectionLabel("接口配置"); Spacer(Modifier.height(8.dp))
             SeuCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Segmented(listOf("deepseek", "compatible"), config.provider, { if (it == "deepseek") "DeepSeek" else "自定义兼容接口" }, { config = if (it == "deepseek") config.copy(provider = it, baseUrl = AiConfig().baseUrl, model = "deepseek-flash", vision = true) else config.copy(provider = it) }, Modifier.fillMaxWidth())

@@ -57,11 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.seu.timetable.ai.AiViewModel
-import com.seu.timetable.ai.AiChatOverlay
-import com.seu.timetable.ai.AiWebOverlay
-import com.seu.timetable.ai.AiSettingsPage
+import com.seu.timetable.ai.AiFeatureImpl
 import com.seu.timetable.data.CasAuthClient
 import com.seu.timetable.data.CasLoginResult
 import com.seu.timetable.data.CredentialStore
@@ -169,7 +165,6 @@ private sealed interface LibraryState {
 
 @Composable
 fun AppRoot() {
-    val ai: AiViewModel = viewModel()
     val context = LocalContext.current
     val settings = remember { SettingsStore(context) }
     val credentials = remember { CredentialStore(context) }
@@ -477,7 +472,6 @@ fun AppRoot() {
                     )
 
                     is LibraryState.Ready -> MainScaffold(
-                        ai = ai,
                         loaded = s.board,
                         settings = settings,
                         credentials = credentials,
@@ -659,7 +653,6 @@ private fun EmptyLibraryView(
 
 @Composable
 private fun MainScaffold(
-    ai: AiViewModel,
     loaded: LoadedBoard,
     settings: SettingsStore,
     credentials: CredentialStore,
@@ -812,7 +805,7 @@ private fun MainScaffold(
                     )
 
                     HomeTab.PROFILE -> ProfilePage(
-                        aiSummary = ai.state.collectAsState().value.let { "${it.config.model} · ${if (it.configured) "已配置" else "未填写 API Key"}" },
+                        aiSummary = AiFeatureImpl.profileSubtitle(),
                         onOpenAiSettings = { screen = Screen.AiSettings },
                         themeMode = themeMode,
                         onThemeModeChange = onThemeModeChange,
@@ -903,9 +896,9 @@ private fun MainScaffold(
                 is Screen.Help -> HelpPage(
                     onBack = { screen = Screen.Home },
                 )
-                is Screen.AiSettings -> if (com.seu.timetable.BuildConfig.BUILD_TYPE == "trial") {
-                    AiSettingsPage(ai, onBack = { screen = Screen.Home })
-                } else Box(Modifier.fillMaxSize())
+                is Screen.AiSettings -> AiFeatureImpl.SettingsScreen(
+                    onBack = { screen = Screen.Home },
+                )
             }
         }
 
@@ -919,14 +912,17 @@ private fun MainScaffold(
         }
     }
 
-    if (com.seu.timetable.BuildConfig.BUILD_TYPE == "trial") {
-        AiChatOverlay(ai, visible = screen is Screen.Home && tab == HomeTab.TIMETABLE && !guideRunning,
-            onSettings = { screen = Screen.AiSettings })
-    } else AiWebOverlay(ai, loaded, week,
+    AiFeatureImpl.Overlay(
+        loaded = loaded,
+        week = week,
         visible = screen is Screen.Home && tab == HomeTab.TIMETABLE && !guideRunning,
         settingsVisible = screen is Screen.AiSettings,
-        open = aiChatOpen, onOpenChange = { aiChatOpen = it },
-        onBack = { screen = Screen.Home }, onChanged = onContentChanged)
+        open = aiChatOpen,
+        onOpenChange = { aiChatOpen = it },
+        onOpenSettings = { screen = Screen.AiSettings },
+        onBack = { screen = Screen.Home },
+        onChanged = onContentChanged,
+    )
 
     // ---- 新手实操引导浮层 ----
     //

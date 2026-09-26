@@ -14,6 +14,14 @@ data class AiUiState(
     val config: AiConfig = AiConfig(), val document: ChatDocument = ChatDocument(), val position: ChatPosition = ChatPosition(),
     val ready: Boolean = false, val busy: Boolean = false, val importing: Boolean = false,
     val cacheError: String = "", val error: String = "", val settingsStatus: String = "", val testing: Boolean = false, val configured: Boolean = false,
+    /**
+     * AI 助手是否启用。默认关。
+     *
+     * 这是第二道闸门：flavor 决定「AI 代码是否进包」，它决定「进了包的 AI 是否生效」。
+     * 关着时浮窗不渲染、不发任何请求，课表与照片不会离开本机——
+     * 用户没主动打开，就不该有任何数据出网。
+     */
+    val enabled: Boolean = false,
 )
 
 class AiViewModel(application: Application) : AndroidViewModel(application) {
@@ -47,6 +55,9 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
             runCatching { withContext(Dispatchers.IO) { val doc = store.loadChat(); store.removeUnusedImages(doc); doc to store.loadPosition() } }.onSuccess { (doc, position) ->
                 mutable.update { it.copy(document = doc, position = position) }
             }.onFailure { mutable.update { it.copy(cacheError = "聊天记录无法读取，可清空后重新开始") } }
+            // 总开关单独读：它与模型配置、聊天记录互不依赖，
+            // 任一读失败都不该影响另外两项的可用性。
+            mutable.update { it.copy(enabled = withContext(Dispatchers.IO) { store.loadEnabled() }) }
             mutable.update { it.copy(ready = true) }
         }
     }
@@ -126,6 +137,16 @@ class AiViewModel(application: Application) : AndroidViewModel(application) {
             catch (e: Exception) { updateAnswer("error", e.message ?: "请求失败，请重试") }
             finally { mutable.update { it.copy(busy = false) }; persist() }
         }
+    }
+    /**
+     * 开关 AI 助手。
+     *
+     * 状态先改、落盘异步：界面立即响应，且这是用户对「数据是否出网」的表态，
+     * 不该因为进程随后被杀而回退。
+     */
+    fun setEnabled(enabled: Boolean) {
+        mutable.update { it.copy(enabled = enabled) }
+        viewModelScope.launch { withContext(Dispatchers.IO) { runCatching { store.saveEnabled(enabled) } } }
     }
     fun saveSettings(config: AiConfig, key: String) {
         viewModelScope.launch {

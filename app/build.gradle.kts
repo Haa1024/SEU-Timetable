@@ -8,6 +8,25 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization")
 }
 
+// 更新清单地址，按发行形态分开维护（见下方 productFlavors 的说明）。
+val updateBase = "https://raw.githubusercontent.com/Haa1024/SEU-Timetable/main"
+// 原版：沿用根目录的 update.json。
+// 已发布的 v1.2.0 及更早版本把这两个地址**硬编码**在代码里（当时 UpdateSources 是常量），
+// 动它等于让老用户永远收不到更新。所以必须保持原样，让新旧原版共用同一份清单——
+// 顺带的好处是发版时原版只需要维护一个文件。
+val updatePlain = "$updateBase/update.json,https://cdn.jsdelivr.net/gh/Haa1024/SEU-Timetable@main/update.json"
+// AI 版：独立清单，与上面并列放在仓库根，内容各自维护、互不影响。
+val updateAi = "$updateBase/update-ai.json,https://cdn.jsdelivr.net/gh/Haa1024/SEU-Timetable@main/update-ai.json"
+
+/**
+ * 开发期的界面选型：`-PaiUi=compose` 走 Compose 原生浮窗，默认走 WebView 浮窗。
+ *
+ * 刻意做成构建参数而非常量：两套界面共用一个 AiViewModel 与同一套课表编解码，
+ * 只有渲染层不同，因此适合在开发机上快速对照，而不该让用户去选。
+ * 它与「AI 是否启用」是两回事——后者由用户在设置里决定。
+ */
+val aiUi = providers.gradleProperty("aiUi").getOrElse("webview")
+
 tasks.withType<Test>().configureEach {
     // Opt-in API checks must execute, rather than reuse a previous skipped/cached result.
     if (!System.getenv("SEU_AI_TEST_KEY_FILE").isNullOrBlank()) {
@@ -45,21 +64,40 @@ android {
         versionName = "1.2.0"
     }
 
+    /**
+     * 「是否接入 AI」是一个 flavor 维度，不是 buildType。
+     *
+     * buildType 的语义是「同一产品的不同构建模式」（debug / release）。
+     * 把「要不要某个功能」挂上去，结果是**所有**构建模式都带上它——
+     * 这正是此前 AI 会默认出现在 release 包里的原因。
+     *
+     * 换成 flavor 之后，AI 代码物理上属于 ai 变体（见 app/src/ai）：
+     * plain 变体在编译期就不含它——没有字节码、没有 assets、没有相关依赖，
+     * 因此不存在「运行时忘了关」这种可能。
+     */
+    flavorDimensions += "ai"
+
+    productFlavors {
+        create("plain") {
+            dimension = "ai"
+            // 与原版逐字节等价：applicationId / versionName / app_name 一律不加后缀。
+            // 这是老用户能无感覆盖升级的前提。
+            buildConfigField("String", "UPDATE_MANIFEST", "\"$updatePlain\"")
+        }
+        create("ai") {
+            dimension = "ai"
+            // 与 plain 同机共存的前提是包名不同。代价是两者的数据沙盒互相独立——
+            // 从原版换过来要重新登录、重新导入课表。这条取舍无法两全。
+            applicationIdSuffix = ".ai"
+            versionNameSuffix = "-ai"
+            resValue("string", "app_name", "SEU课表 AI")
+            // 更新清单必须按 flavor 分开，否则两版会互相「更新到对方」。
+            buildConfigField("String", "AI_UI", "\"$aiUi\"")
+            buildConfigField("String", "UPDATE_MANIFEST", "\"$updateAi\"")
+        }
+    }
+
     buildTypes {
-        create("trialTwo") {
-            initWith(getByName("debug"))
-            applicationIdSuffix = ".test02"
-            versionNameSuffix = "-test02"
-            resValue("string", "app_name", "test02")
-            matchingFallbacks += listOf("debug")
-        }
-        create("trial") {
-            initWith(getByName("debug"))
-            applicationIdSuffix = ".test01"
-            versionNameSuffix = "-test01"
-            resValue("string", "app_name", "test01")
-            matchingFallbacks += listOf("debug")
-        }
         release {
             signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
@@ -100,16 +138,6 @@ android {
     }
 }
 
-// Keep the original/trial versions intact; allow installing this fix over test02.
-androidComponents {
-    onVariants(selector().withBuildType("trialTwo")) { variant ->
-        variant.outputs.forEach {
-            it.versionCode.set(5)
-            it.versionName.set("02.02")
-        }
-    }
-}
-
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.09.00")
     implementation(composeBom)
@@ -134,9 +162,11 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("androidx.datastore:datastore-preferences:1.1.1")
-    implementation("io.noties.markwon:core:4.6.2")
-    implementation("io.noties.markwon:ext-tables:4.6.2")
-    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // AI 专属依赖跟随 flavor：plain 变体不打包，既省体积也少一份供应链面。
+    // okhttp 留在上面不动——抓课表本来就要用它。
+    "aiImplementation"("io.noties.markwon:core:4.6.2")
+    "aiImplementation"("io.noties.markwon:ext-tables:4.6.2")
+    "aiImplementation"("androidx.exifinterface:exifinterface:1.3.7")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

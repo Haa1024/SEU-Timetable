@@ -72,8 +72,12 @@ import kotlinx.coroutines.launch
  */
 @Composable
 fun ProfilePage(
-    aiSummary: String,
-    onOpenAiSettings: () -> Unit,
+    /**
+     * 「我的」页的 AI 入口。两个都为 null 表示本变体不含 AI——
+     * 此时整块隐藏，而不是留一个点了没反应的按钮。
+     */
+    aiSummary: String? = null,
+    onOpenAiSettings: (() -> Unit)? = null,
     themeMode: ThemeMode,
     onThemeModeChange: (ThemeMode) -> Unit,
     accountSubtitle: String,
@@ -166,12 +170,14 @@ fun ProfilePage(
             }
         }
 
-        Spacer(Modifier.height(20.dp))
-        SectionLabel("AI 助手")
-        Spacer(Modifier.height(8.dp))
-        SeuCard(Modifier.fillMaxWidth(), padding = 0.dp) {
-            Column(Modifier.padding(horizontal = 16.dp)) {
-                SettingRow(title = "AI 模型设置", subtitle = aiSummary, onClick = onOpenAiSettings)
+        if (aiSummary != null && onOpenAiSettings != null) {
+            Spacer(Modifier.height(20.dp))
+            SectionLabel("AI 助手")
+            Spacer(Modifier.height(8.dp))
+            SeuCard(Modifier.fillMaxWidth(), padding = 0.dp) {
+                Column(Modifier.padding(horizontal = 16.dp)) {
+                    SettingRow(title = "AI 模型设置", subtitle = aiSummary, onClick = onOpenAiSettings)
+                }
             }
         }
         Spacer(Modifier.height(20.dp))

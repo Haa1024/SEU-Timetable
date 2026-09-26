@@ -1,0 +1,7 @@
+{
+  "versionCode": 3,
+  "versionName": "1.2.0-ai",
+  "apkUrl": "https://github.com/Haa1024/SEU-Timetable/releases/download/v1.2.0-ai/SEU-Timetable-v1.2.0-ai.apk",
+  "notes": "接入 AI 课表助手的独立发行版。\n\n• 与原版「SEU课表」包名不同，可同时安装、互不影响\n• 支持自然语言增删改课、课表照片识别导入，附撤销\n• AI 助手**默认关闭**，需在「我的 → AI 模型设置」里手动启用\n• 模型与 API Key 由你自己填写；聊天记录与照片保存在本机\n\n注意：本版与「SEU课表」原版的数据互不相通，首次使用需重新登录并导入课表。",
+  "mandatory": false
+}

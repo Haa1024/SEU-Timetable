@@ -1,5 +1,6 @@
 package com.seu.timetable.update
 
+import com.seu.timetable.BuildConfig
 import com.seu.timetable.util.DebugLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,24 +20,22 @@ import java.util.concurrent.TimeUnit
  */
 object UpdateSources {
 
-    /** 仓库归属，改托管时只动这两行。 */
-    private const val OWNER = "Haa1024"
-    private const val REPO = "SEU-Timetable"
-
     /**
      * 清单地址，按优先级排列，依次降级。
      *
-     * 这里是**唯一**需要在换托管时改动的地方，检查逻辑本身与域名无关。
+     * 由构建脚本**按 flavor** 注入（见 `app/build.gradle.kts` 的 `updatePlain` / `updateAi`）：
+     * 原版与 AI 版各读自己那一份。两者**不能共用一份清单**，否则会互相"更新到对方"——
+     * 轻则某一版永远收不到更新且不报任何错，重则下载到包名不匹配的 APK 而装不上。
+     *
+     * 换托管时改构建脚本里的 `updateBase`，这里的检查逻辑与域名无关。
      *
      * 约定：仓库里放一个 `update.json`（内容见 [UpdateInfo]），
      * APK 作为 Release 资产上传，`apkUrl` 填其直链。
      */
-    val MANIFEST_URLS: List<String> = listOf(
-        // 首选：raw 直链，跳数最少、响应最快
-        "https://raw.githubusercontent.com/$OWNER/$REPO/main/update.json",
-        // 兜底：jsDelivr 的 GitHub 镜像，国内可达性通常优于 raw
-        "https://cdn.jsdelivr.net/gh/$OWNER/$REPO@main/update.json",
-    )
+    val MANIFEST_URLS: List<String> = BuildConfig.UPDATE_MANIFEST
+        .split(',')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
 }
 
 /**
