@@ -31,17 +31,18 @@ interface AiFeature {
     /**
      * 挂在课表页上的聊天浮窗。
      *
-     * 参数看着多，是因为要同时容纳两套既有的 UI 实现：Compose 原生浮窗（进设置走页面导航）
-     * 与 WebView 浮窗（设置在浮窗内部切换）。差异在这个接口里吸收掉，
-     * 共享层因此不需要知道当前用的是哪一套。
+     * 参数看着多，是因为要同时容纳两套界面形态：Compose 原生浮窗与 WebView 浮窗。
+     * 差异在这个接口里吸收掉，共享层因此不需要知道当前用的是哪一套。
      *
      * @param loaded 当前课表，AI 读取并改写它
      * @param week 当前周次
      * @param visible 是否处于可见页面（课表页 且 不在新手引导中）
-     * @param settingsVisible 设置态是否盖在浮窗之上（WebView 浮窗用）
+     * @param settingsVisible 共享层是否已把设置路由到独立页面（`screen is Screen.AiSettings`）。
+     *   设置不再由浮窗绘制，ai 实现因此恒置 false 丢弃此值——壳一旦进入设置态就会铺满屏幕，
+     *   把原生设置页整个盖住。参数保留是为不改动共享层的调用协议
      * @param open 浮窗是否展开。展开时会遮住课表，需由调用方锁住横向滚动
      * @param onOpenChange 浮窗展开态变化。原版不会触发
-     * @param onOpenSettings 进入设置（Compose 浮窗用）
+     * @param onOpenSettings 跳到设置页。仅 Compose 浮窗消费；WebView 形态从「我的」页进入
      * @param onBack 从设置态返回课表
      * @param onChanged 课表被 AI 改写后通知外层重新加载
      */
@@ -60,7 +61,10 @@ interface AiFeature {
     /**
      * `Screen.AiSettings` 对应的整页。
      *
-     * WebView 版在此返回空占位——它的设置界面画在浮窗内部，不占独立页面。
+     * 两种界面形态都返回原生设置页，设置不再交给浮窗画。此前的 WebView 版把设置画在浮窗
+     * 内部，那条路本身有死锁：浮窗由 [Overlay] 渲染，而 [Overlay] 在未启用时直接返回——
+     * 于是「未启用」时点进设置既没有原生页也没有壳，只剩一片白屏，而总开关恰恰只存在于
+     * 那一页。**设置页不能由一个可能被门禁拦住的层来渲染。**
      */
     @Composable fun SettingsScreen(onBack: () -> Unit)
 }
