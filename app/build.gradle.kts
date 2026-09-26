@@ -80,8 +80,10 @@ android {
     productFlavors {
         create("plain") {
             dimension = "ai"
-            // 与原版逐字节等价：applicationId / versionName / app_name 一律不加后缀。
-            // 这是老用户能无感覆盖升级的前提。
+            // 与原版共用同一发行身份：applicationId / versionName / app_name 一律不加后缀，
+            // 并且复用同一把签名密钥（同一张证书 SHA-256 指纹）。这是老用户能无感覆盖升级的前提。
+            // 注意 APK 本身**不是**与 v1.2.0 逐字节相同：main 源码集含本次的 AiFeature 间接层
+            // 与数据层加固，实测 classes.dex 比 v1.2.0 大 2 516 字节，其余 116 个条目逐一相同。
             buildConfigField("String", "UPDATE_MANIFEST", "\"$updatePlain\"")
         }
         create("ai") {
